@@ -1,3 +1,6 @@
+import 'package:finanzas_ia/models/flujo_caja.dart';
+import 'package:finanzas_ia/models/listado_transaccion.dart';
+import 'package:finanzas_ia/models/producto_inventario.dart';
 import 'package:finanzas_ia/models/resumen_analisis.dart';
 import 'package:finanzas_ia/models/totales_mes.dart';
 import 'package:finanzas_ia/models/ultima_transaccion.dart';
@@ -14,9 +17,13 @@ class FakeRepository implements FinanzasRepository {
   int totalesConsultas = 0;
   int resumenConsultas = 0;
   int ultimaConsultas = 0;
+  int listadoConsultas = 0;
+  int flujoConsultas = 0;
+  int inventarioConsultas = 0;
   String? lastCategoriaId;
   String? lastTransaccionId;
   String? lastConversacionId;
+  String? ultimoTipoListado;
   TotalesMes totalesMes = const TotalesMes(
     ingresos: 500,
     egresos: 300,
@@ -52,6 +59,39 @@ class FakeRepository implements FinanzasRepository {
     categoriaNivel1: 'Gastos operativos',
     categoriaNivel2: 'Servicios públicos',
   );
+  List<ListadoTransaccion> listado = [
+    ListadoTransaccion(
+      fecha: DateTime(2026, 8, 22),
+      tipo: 'ingreso',
+      monto: 200,
+      categoriaNivel1: 'Ingresos',
+      categoriaNivel2: 'Venta de producto',
+    ),
+    ListadoTransaccion(
+      fecha: DateTime(2026, 8, 21),
+      tipo: 'egreso',
+      monto: 150,
+      categoriaNivel1: 'Gastos operativos',
+      categoriaNivel2: 'Servicios públicos',
+    ),
+  ];
+  List<FlujoDia> flujo = [
+    FlujoDia(
+      fecha: DateTime(2026, 8, 22),
+      ingresos: 500,
+      egresos: 200,
+      balance: 300,
+    ),
+  ];
+  List<ProductoInventario> productos = const [
+    ProductoInventario(
+      nombre: 'Fruta (caja)',
+      precioCompra: 80,
+      precioVenta: 120,
+      existencias: 10,
+      valorTotal: 800,
+    ),
+  ];
 
   @override
   Future<String> buscarOCrearCategoriaNivel2({
@@ -116,5 +156,28 @@ class FakeRepository implements FinanzasRepository {
   Future<UltimaTransaccion?> ultimaTransaccion({String? tipo}) async {
     ultimaConsultas++;
     return ultima;
+  }
+
+  @override
+  Future<List<ListadoTransaccion>> listadoTransacciones({
+    String? tipo,
+    int limite = 50,
+  }) async {
+    listadoConsultas++;
+    ultimoTipoListado = tipo;
+    if (tipo == null) return listado;
+    return listado.where((t) => t.tipo == tipo).toList();
+  }
+
+  @override
+  Future<List<FlujoDia>> flujoCaja() async {
+    flujoConsultas++;
+    return flujo;
+  }
+
+  @override
+  Future<List<ProductoInventario>> inventario() async {
+    inventarioConsultas++;
+    return productos;
   }
 }

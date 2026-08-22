@@ -62,6 +62,12 @@ datos_consulta elige tipo_consulta:
 - "ultima_transaccion" cuando pregunte por la última venta, compra, gasto o
   movimiento (usa "tipo": "ingreso" o "egreso" para filtrar).
 - "totales" para montos o resúmenes numéricos del periodo.
+- "listado" cuando pida la lista o detalle de ingresos/egresos/movimientos
+  (usa "tipo": "ingreso" o "egreso" para filtrar).
+- "flujo_caja" cuando pregunte por el flujo de caja o cómo va el dinero día a día.
+- "viabilidad" cuando pregunte si puede comprar algo o si es viable comprar; llena
+  "monto" con el costo total planeado.
+- "inventario" cuando pregunte por existencias, productos o stock.
 
 Usa los mensajes anteriores de la conversación como contexto para interpretar el
 mensaje actual (por ejemplo, si el usuario dice "y esto" o "esa fruta", refiere a
@@ -97,7 +103,15 @@ algo ya mencionado).
             'properties': {
               'tipo_consulta': {
                 'type': 'string',
-                'enum': ['totales', 'ultima_transaccion', 'analisis'],
+                'enum': [
+                  'totales',
+                  'ultima_transaccion',
+                  'analisis',
+                  'listado',
+                  'flujo_caja',
+                  'viabilidad',
+                  'inventario',
+                ],
               },
               'tipo_reporte': {
                 'type': 'string',
@@ -112,6 +126,7 @@ algo ya mencionado).
                 'enum': ['hoy', 'mes_actual', 'mes_pasado'],
               },
               'categoria_nivel1': {'type': ['string', 'null']},
+              'monto': {'type': ['number', 'null']},
             },
           },
         },
@@ -226,13 +241,27 @@ o alerta, y una recomendación concreta. No inventes números que no estén en e
 resumen.
 ''';
 
-  Future<String> analizar({required String resumen}) async {
+  static const viabilidadPrompt = '''
+Eres un asesor financiero para microempresarios guatemaltecos. Recibes un plan de
+compra (monto en quetzales) y el resumen financiero del negocio (ingresos, egresos
+y balance del mes; puede incluir el valor del inventario actual). Responde en
+español, breve (máximo 4-5 líneas): indica si la compra es viable según el balance
+y los ingresos, cuánto margen le quedaría, y una recomendación concreta (comprar
+menos cantidad, priorizar proveedores, o que sí proceda). No inventes números que
+no estén en el resumen.
+''';
+
+  Future<String> analizar({
+    required String resumen,
+    String? prompt,
+  }) async {
     if (_apiKey.isEmpty || _apiKey.contains('tu_key')) {
       throw LlmException(
         'LLM_API_KEY no configurada en .env (usa la key de DeepSeek/OpenAI).',
       );
     }
 
+    final systemPromptUsado = prompt ?? analisisPrompt;
     final endpoint = '${_baseUrl.replaceAll(RegExp(r'/$'), '')}/chat/completions';
 
     for (var intento = 0; intento <= _maxReintentos; intento++) {
@@ -248,7 +277,7 @@ resumen.
           data: {
             'model': _model,
             'messages': [
-              {'role': 'system', 'content': analisisPrompt},
+              {'role': 'system', 'content': systemPromptUsado},
               {'role': 'user', 'content': resumen},
             ],
             'temperature': 0.6,

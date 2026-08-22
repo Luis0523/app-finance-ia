@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../models/chat_message.dart';
+import '../models/tabla_datos.dart';
 import '../providers/chat_provider.dart';
 import '../providers/speech_provider.dart';
 
@@ -234,6 +235,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     itemCount: chat.messages.length,
                     itemBuilder: (context, index) {
                       final message = chat.messages[index];
+                      if (message.tabla != null) {
+                        return _TablaCard(message: message);
+                      }
                       if (message.reporte != null) {
                         return _ReporteCard(message: message);
                       }
@@ -576,6 +580,103 @@ class _TransactionCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _TablaCard extends StatelessWidget {
+  const _TablaCard({required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tabla = message.tabla!;
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (message.text.isNotEmpty)
+                Text(message.text, style: theme.textTheme.bodyLarge),
+              if (message.text.isNotEmpty) const SizedBox(height: 8),
+              Text(
+                tabla.titulo,
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: _buildTabla(tabla, theme),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabla(TablaDatos tabla, ThemeData theme) {
+    final borderColor = theme.colorScheme.outlineVariant;
+
+    return Table(
+      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+      border: TableBorder.all(color: borderColor),
+      children: [
+        TableRow(
+          decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerHighest),
+          children: [
+            for (final header in tabla.headers)
+              _celda(
+                Text(header,
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+              ),
+          ],
+        ),
+        for (var i = 0; i < tabla.rows.length; i++)
+          TableRow(
+            children: [
+              for (var c = 0; c < tabla.rows[i].length; c++)
+                _celda(
+                  Text(
+                    tabla.rows[i][c],
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: _colorCelda(tabla, i, c, theme),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Color? _colorCelda(TablaDatos tabla, int fila, int col, ThemeData theme) {
+    if (tabla.columnaColor != col) return null;
+    final tipo = fila < tabla.tipos.length ? tabla.tipos[fila] : '';
+    if (tipo == 'ingreso') return Colors.green.shade700;
+    if (tipo == 'egreso') return theme.colorScheme.error;
+    return null;
+  }
+
+  Widget _celda(Widget child) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: child,
     );
   }
 }

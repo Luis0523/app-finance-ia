@@ -1,3 +1,4 @@
+import 'tabla_datos.dart';
 import 'totales_mes.dart';
 
 class ChatMessage {
@@ -8,6 +9,7 @@ class ChatMessage {
     required this.timestamp,
     this.tipoMovimiento,
     this.reporte,
+    this.tabla,
   });
 
   final String id;
@@ -20,4 +22,7 @@ class ChatMessage {
 
   /// Totales del mes cuando el mensaje responde una consulta de reporte.
   final TotalesMes? reporte;
+
+  /// Tabla/detalle (listado, flujo de caja, inventario).
+  final TablaDatos? tabla;
 }

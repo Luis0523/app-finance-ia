@@ -1,5 +1,8 @@
 import 'package:supabase/supabase.dart';
 
+import '../models/flujo_caja.dart';
+import '../models/listado_transaccion.dart';
+import '../models/producto_inventario.dart';
 import '../models/resumen_analisis.dart';
 import '../models/totales_mes.dart';
 import '../models/ultima_transaccion.dart';
@@ -46,6 +49,15 @@ abstract class FinanzasRepository {
   Future<ResumenAnalisis> obtenerResumenAnalisis();
 
   Future<UltimaTransaccion?> ultimaTransaccion({String? tipo});
+
+  Future<List<ListadoTransaccion>> listadoTransacciones({
+    String? tipo,
+    int limite = 50,
+  });
+
+  Future<List<FlujoDia>> flujoCaja();
+
+  Future<List<ProductoInventario>> inventario();
 }
 
 class SupabaseRepository implements FinanzasRepository {
@@ -70,6 +82,9 @@ class SupabaseRepository implements FinanzasRepository {
       );
     }
     _negocioId = negocios.first['id'] as String;
+
+    // Identifica la sesión para que RLS filtre por negocio.
+    _client.rest.headers['x-negocio-id'] = _negocioId!;
 
     final usuarios = await _client
         .from('usuarios')
@@ -303,5 +318,83 @@ class SupabaseRepository implements FinanzasRepository {
       if (first is Map) return Map<String, dynamic>.from(first);
     }
     return null;
+  }
+
+  List<Map<String, dynamic>> _filasDe(dynamic rows) {
+    if (rows is! List) return const [];
+    return rows.whereType<Map>().map(Map<String, dynamic>.from).toList();
+  }
+
+  @override
+  Future<List<ListadoTransaccion>> listadoTransacciones({
+    String? tipo,
+    int limite = 50,
+  }) async {
+    await _asegurarDatosPrueba();
+    final negocioId = _negocioId!;
+
+    final rows = await _client.rpc(
+      'obtener_listado_transacciones',
+      params: {
+        'p_negocio_id': negocioId,
+        'p_tipo': ?tipo,
+        'p_limite': limite,
+      },
+    );
+
+    return _filasDe(rows).map((row) {
+      return ListadoTransaccion(
+        fecha:
+            DateTime.tryParse(row['fecha']?.toString() ?? '') ?? DateTime.now(),
+        tipo: row['tipo']?.toString() ?? '',
+        monto: (row['monto'] as num?)?.toDouble() ?? 0,
+        categoriaNivel1: row['categoria_nivel1']?.toString(),
+        categoriaNivel2: row['categoria_nivel2']?.toString(),
+        descripcion: row['descripcion']?.toString(),
+        origen: row['origen']?.toString(),
+      );
+    }).toList();
+  }
+
+  @override
+  Future<List<FlujoDia>> flujoCaja() async {
+    await _asegurarDatosPrueba();
+    final negocioId = _negocioId!;
+
+    final rows = await _client.rpc(
+      'obtener_flujo_caja',
+      params: {'p_negocio_id': negocioId},
+    );
+
+    return _filasDe(rows).map((row) {
+      return FlujoDia(
+        fecha:
+            DateTime.tryParse(row['fecha']?.toString() ?? '') ?? DateTime.now(),
+        ingresos: (row['ingresos'] as num?)?.toDouble() ?? 0,
+        egresos: (row['egresos'] as num?)?.toDouble() ?? 0,
+        balance: (row['balance'] as num?)?.toDouble() ?? 0,
+      );
+    }).toList();
+  }
+
+  @override
+  Future<List<ProductoInventario>> inventario() async {
+    await _asegurarDatosPrueba();
+    final negocioId = _negocioId!;
+
+    final rows = await _client.rpc(
+      'obtener_inventario',
+      params: {'p_negocio_id': negocioId},
+    );
+
+    return _filasDe(rows).map((row) {
+      return ProductoInventario(
+        nombre: row['nombre']?.toString() ?? '',
+        precioCompra: (row['precio_compra'] as num?)?.toDouble() ?? 0,
+        precioVenta: (row['precio_venta'] as num?)?.toDouble() ?? 0,
+        existencias: (row['existencias'] as num?)?.toDouble() ?? 0,
+        valorTotal: (row['valor_total'] as num?)?.toDouble() ?? 0,
+      );
+    }).toList();
   }
 }

@@ -58,9 +58,11 @@ class DatosConsulta {
     this.tipo,
     this.periodo,
     this.categoriaNivel1,
+    this.monto,
   });
 
-  /// 'totales' | 'ultima_transaccion' | 'analisis' | null
+  /// 'totales' | 'ultima_transaccion' | 'analisis' | 'listado' |
+  /// 'flujo_caja' | 'viabilidad' | 'inventario' | null
   final String? tipoConsulta;
 
   /// 'ingresos' | 'egresos' | 'ambos' | null
@@ -75,13 +77,23 @@ class DatosConsulta {
   /// Una de las 8 categorías de nivel 1 o null.
   final String? categoriaNivel1;
 
+  /// Monto planeado (para consultas de viabilidad de compra).
+  final double? monto;
+
   factory DatosConsulta.fromMap(Map<String, dynamic> map) => DatosConsulta(
         tipoConsulta: map['tipo_consulta']?.toString(),
         tipoReporte: map['tipo_reporte']?.toString(),
         tipo: map['tipo']?.toString(),
         periodo: map['periodo']?.toString(),
         categoriaNivel1: map['categoria_nivel1']?.toString(),
+        monto: _asDouble(map['monto']),
       );
+
+  static double? _asDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
+  }
 }
 
 class LlmResponse {

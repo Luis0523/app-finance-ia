@@ -5,7 +5,9 @@ import 'package:uuid/uuid.dart';
 
 import '../models/chat_message.dart';
 import '../models/llm_response.dart';
+import '../models/producto_inventario.dart';
 import '../models/resumen_analisis.dart';
+import '../models/tabla_datos.dart';
 import '../models/totales_mes.dart';
 import '../models/ultima_transaccion.dart';
 import '../services/llm_service.dart';
@@ -245,6 +247,18 @@ class ChatController extends StateNotifier<ChatState> {
       case 'ultima_transaccion':
         await _manejarUltimaTransaccion(consulta!);
         break;
+      case 'listado':
+        await _manejarListado(consulta!, mensajeDelLlm);
+        break;
+      case 'flujo_caja':
+        await _manejarFlujoCaja(mensajeDelLlm);
+        break;
+      case 'inventario':
+        await _manejarInventario(mensajeDelLlm);
+        break;
+      case 'viabilidad':
+        await _manejarViabilidad(consulta!);
+        break;
       default:
         try {
           final totales = await _repo.obtenerTotalesMes();
@@ -291,6 +305,157 @@ class ChatController extends StateNotifier<ChatState> {
     }
   }
 
+  Future<void> _manejarListado(DatosConsulta consulta, String mensaje) async {
+    try {
+      final tipo = consulta.tipo == 'ingreso' || consulta.tipo == 'egreso'
+          ? consulta.tipo
+          : null;
+      final lista = await _repo.listadoTransacciones(tipo: tipo);
+
+      if (lista.isEmpty) {
+        _addAssistantMessage(
+          'Aún no hay ${tipo == 'ingreso' ? 'ingresos' : tipo == 'egreso' ? 'egresos' : 'movimientos'} registrados.',
+        );
+        return;
+      }
+
+      final titulo = tipo == 'ingreso'
+          ? 'Mis ingresos'
+          : tipo == 'egreso'
+              ? 'Mis egresos'
+              : 'Mis movimientos';
+      final tabla = TablaDatos(
+        titulo: titulo,
+        headers: const ['Fecha', 'Categoría', 'Monto'],
+        columnaColor: 2,
+        tipos: lista.map((t) => t.tipo).toList(),
+        rows: lista
+            .map((t) => [
+                  DateFormat('dd/MM').format(t.fecha),
+                  t.categoria,
+                  'Q${t.monto.toStringAsFixed(2)}',
+                ])
+            .toList(),
+      );
+      _addTablaMessage(
+        mensaje.isEmpty ? 'Aquí tienes el detalle.' : mensaje,
+        tabla,
+      );
+    } on Exception catch (e) {
+      _addAssistantMessage('No se pudo obtener el listado: $e');
+    }
+  }
+
+  Future<void> _manejarFlujoCaja(String mensaje) async {
+    try {
+      final dias = await _repo.flujoCaja();
+
+      if (dias.isEmpty) {
+        _addAssistantMessage('Aún no hay movimientos en el mes.');
+        return;
+      }
+
+      final tabla = TablaDatos(
+        titulo: 'Flujo de caja del mes',
+        headers: const ['Fecha', 'Ingresos', 'Egresos', 'Balance'],
+        columnaColor: 3,
+        tipos: dias
+            .map((d) => d.balance >= 0 ? 'ingreso' : 'egreso')
+            .toList(),
+        rows: dias
+            .map((d) => [
+                  DateFormat('dd/MM').format(d.fecha),
+                  'Q${d.ingresos.toStringAsFixed(2)}',
+                  'Q${d.egresos.toStringAsFixed(2)}',
+                  'Q${d.balance.toStringAsFixed(2)}',
+                ])
+            .toList(),
+      );
+      _addTablaMessage(
+        mensaje.isEmpty ? 'Este es tu flujo de caja del mes.' : mensaje,
+        tabla,
+      );
+    } on Exception catch (e) {
+      _addAssistantMessage('No se pudo obtener el flujo de caja: $e');
+    }
+  }
+
+  Future<void> _manejarInventario(String mensaje) async {
+    try {
+      final productos = await _repo.inventario();
+
+      if (productos.isEmpty) {
+        _addAssistantMessage('Aún no hay productos registrados.');
+        return;
+      }
+
+      final valorTotal = productos.fold<double>(
+          0, (acc, p) => acc + p.valorTotal);
+      final tabla = TablaDatos(
+        titulo: 'Inventario ($productos.length productos)',
+        headers: const ['Producto', 'Compra', 'Venta', 'Exist.', 'Valor'],
+        rows: productos
+            .map((p) => [
+                  p.nombre,
+                  'Q${p.precioCompra.toStringAsFixed(2)}',
+                  'Q${p.precioVenta.toStringAsFixed(2)}',
+                  p.existencias.toStringAsFixed(0),
+                  'Q${p.valorTotal.toStringAsFixed(2)}',
+                ])
+            .toList(),
+      );
+      final texto = mensaje.isEmpty
+          ? 'Inventario actual (valor total Q${valorTotal.toStringAsFixed(2)}).'
+          : '$mensaje Valor total: Q${valorTotal.toStringAsFixed(2)}.';
+      _addTablaMessage(texto, tabla);
+    } on Exception catch (e) {
+      _addAssistantMessage('No se pudo obtener el inventario: $e');
+    }
+  }
+
+  Future<void> _manejarViabilidad(DatosConsulta consulta) async {
+    final monto = consulta.monto ?? 0;
+    if (monto <= 0) {
+      _addAssistantMessage(
+        '¿De cuánto es la compra que quieres evaluar? Dime el monto.',
+      );
+      return;
+    }
+
+    try {
+      final resumen = await _repo.obtenerResumenAnalisis();
+      final productos = await _repo.inventario();
+      final texto = _formatearPlanCompra(monto, resumen, productos);
+      final analisis = await _llm.analizar(
+        resumen: texto,
+        prompt: LlmService.viabilidadPrompt,
+      );
+      _addAssistantMessage(analisis);
+    } on Exception catch (e) {
+      _addAssistantMessage('No se pudo evaluar la viabilidad: $e');
+    }
+  }
+
+  String _formatearPlanCompra(
+    double monto,
+    ResumenAnalisis resumen,
+    List<ProductoInventario> productos,
+  ) {
+    final valorInventario =
+        productos.fold<double>(0, (acc, p) => acc + p.valorTotal);
+    final buffer = StringBuffer()
+      ..writeln('Plan de compra: Q${monto.toStringAsFixed(2)}')
+      ..writeln('Resumen del mes actual (montos en quetzales):')
+      ..writeln('Ingresos: Q${resumen.ingresos.toStringAsFixed(2)} '
+          '(${resumen.cantidadIngresos} movimientos)')
+      ..writeln('Egresos: Q${resumen.egresos.toStringAsFixed(2)} '
+          '(${resumen.cantidadEgresos} movimientos)')
+      ..writeln('Balance: Q${resumen.balance.toStringAsFixed(2)}')
+      ..writeln('Valor total del inventario actual: '
+          'Q${valorInventario.toStringAsFixed(2)}');
+    return buffer.toString();
+  }
+
   String _formatearUltimaTransaccion(UltimaTransaccion ultima) {
     final esIngreso = ultima.tipo == 'ingreso';
     final palabra = esIngreso ? 'última venta' : 'último egreso';
@@ -325,6 +490,21 @@ class ChatController extends StateNotifier<ChatState> {
       isUser: false,
       timestamp: DateTime.now(),
       reporte: totales,
+    );
+    state = state.copyWith(
+      messages: [...state.messages, message],
+      isSending: false,
+      isSaving: false,
+    );
+  }
+
+  void _addTablaMessage(String text, TablaDatos tabla) {
+    final message = ChatMessage(
+      id: _uuid.v4(),
+      text: text,
+      isUser: false,
+      timestamp: DateTime.now(),
+      tabla: tabla,
     );
     state = state.copyWith(
       messages: [...state.messages, message],

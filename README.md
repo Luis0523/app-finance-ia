@@ -45,6 +45,7 @@ Ingresos, Costos de venta, Gastos operativos, Gastos administrativos, Otros gast
 | **Fase 3** | Confirmación y persistencia en Supabase (`transacciones` + `conversaciones`) | ✅ |
 | **Fase 4** | Totales del mes (RPC `obtener_totales_mes`) | ✅ |
 | **Fase 5** | Consultas específicas (última transacción) y análisis con IA sobre agregados por categoría | ✅ |
+| **Fase 6** | Listado/tabla de ingresos y egresos, flujo de caja, inventario y análisis de viabilidad de compra | ✅ |
 
 ### Criterios de aceptación por fase
 

@@ -103,6 +103,25 @@ void main() {
     expect(response.datosConsulta!.tipo, 'ingreso');
   });
 
+  test('parsea el monto planeado en consultas de viabilidad', () {
+    const json = '''
+    {
+      "tipo_respuesta": "consulta_reporte",
+      "mensaje_para_usuario": "",
+      "datos_transaccion": null,
+      "datos_consulta": {
+        "tipo_consulta": "viabilidad",
+        "monto": 500.5
+      }
+    }
+    ''';
+
+    final response = LlmResponse.fromJson(json);
+
+    expect(response.datosConsulta!.tipoConsulta, 'viabilidad');
+    expect(response.datosConsulta!.monto, 500.5);
+  });
+
   test('monto numérico como string se convierte a double', () {
     const json = '''
     {

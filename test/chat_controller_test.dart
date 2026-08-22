@@ -31,7 +31,7 @@ class _FakeLlmService extends LlmService {
   }
 
   @override
-  Future<String> analizar({required String resumen}) async {
+  Future<String> analizar({required String resumen, String? prompt}) async {
     analisisLlamadas++;
     ultimoResumen = resumen;
     return 'Vas bien: balance positivo y ventas por encima de tus gastos.';
@@ -101,6 +101,48 @@ LlmResponse _consultaAnalisis() {
     mensajeParaUsuario: 'Aquí va mi análisis.',
     datosTransaccion: null,
     datosConsulta: DatosConsulta(tipoConsulta: 'analisis'),
+  );
+}
+
+LlmResponse _consultaListado() {
+  return const LlmResponse(
+    tipoRespuesta: TipoRespuesta.consultaReporte,
+    mensajeParaUsuario: 'Aquí está el detalle.',
+    datosTransaccion: null,
+    datosConsulta: DatosConsulta(
+      tipoConsulta: 'listado',
+      tipo: 'egreso',
+    ),
+  );
+}
+
+LlmResponse _consultaFlujo() {
+  return const LlmResponse(
+    tipoRespuesta: TipoRespuesta.consultaReporte,
+    mensajeParaUsuario: 'Tu flujo de caja.',
+    datosTransaccion: null,
+    datosConsulta: DatosConsulta(tipoConsulta: 'flujo_caja'),
+  );
+}
+
+LlmResponse _consultaInventario() {
+  return const LlmResponse(
+    tipoRespuesta: TipoRespuesta.consultaReporte,
+    mensajeParaUsuario: 'Tu inventario.',
+    datosTransaccion: null,
+    datosConsulta: DatosConsulta(tipoConsulta: 'inventario'),
+  );
+}
+
+LlmResponse _consultaViabilidad() {
+  return const LlmResponse(
+    tipoRespuesta: TipoRespuesta.consultaReporte,
+    mensajeParaUsuario: 'Analizo la compra.',
+    datosTransaccion: null,
+    datosConsulta: DatosConsulta(
+      tipoConsulta: 'viabilidad',
+      monto: 500,
+    ),
   );
 }
 
@@ -334,6 +376,80 @@ void main() {
     expect(llm.ultimoResumen, contains('Ingresos: Q500.00'));
     expect(llm.ultimoResumen, contains('Desglose por categoría'));
     expect(llm.ultimoResumen, contains('Venta de producto'));
+  });
+
+  test('listado de egresos devuelve una tabla filtrada por tipo', () async {
+    final repo = FakeRepository();
+    final controller = ChatController(_FakeLlmService([_consultaListado()]), repo);
+
+    await controller.sendMessage('haz la lista de mis egresos');
+
+    final message = controller.state.messages.last;
+    expect(message.tabla, isNotNull);
+    expect(message.tabla!.titulo, 'Mis egresos');
+    expect(message.tabla!.headers, ['Fecha', 'Categoría', 'Monto']);
+    expect(message.tabla!.rows.length, 1);
+    expect(repo.ultimoTipoListado, 'egreso');
+  });
+
+  test('flujo de caja devuelve una tabla por día', () async {
+    final repo = FakeRepository();
+    final controller = ChatController(_FakeLlmService([_consultaFlujo()]), repo);
+
+    await controller.sendMessage('¿cómo va mi flujo de caja?');
+
+    final message = controller.state.messages.last;
+    expect(message.tabla, isNotNull);
+    expect(message.tabla!.titulo, 'Flujo de caja del mes');
+    expect(repo.flujoConsultas, 1);
+  });
+
+  test('inventario devuelve tabla con productos y valor', () async {
+    final repo = FakeRepository();
+    final controller = ChatController(_FakeLlmService([_consultaInventario()]), repo);
+
+    await controller.sendMessage('¿qué tengo en inventario?');
+
+    final message = controller.state.messages.last;
+    expect(message.tabla, isNotNull);
+    expect(message.tabla!.titulo, contains('Inventario'));
+    expect(message.text, contains('Q800.00'));
+    expect(repo.inventarioConsultas, 1);
+  });
+
+  test('viabilidad de compra usa balance e inventario y responde análisis', () async {
+    final repo = FakeRepository();
+    final llm = _FakeLlmService([_consultaViabilidad()]);
+    final controller = ChatController(llm, repo);
+
+    await controller.sendMessage('quiero comprar mercadería por Q500, ¿es viable?');
+
+    final message = controller.state.messages.last;
+    expect(message.text, contains('balance positivo'));
+    expect(llm.ultimoResumen, contains('Plan de compra: Q500.00'));
+    expect(llm.ultimoResumen, contains('Balance: Q200.00'));
+    expect(llm.ultimoResumen, contains('Valor total del inventario'));
+    expect(repo.resumenConsultas, 1);
+    expect(repo.inventarioConsultas, 1);
+  });
+
+  test('viabilidad sin monto pide el monto', () async {
+    final repo = FakeRepository();
+    final controller = ChatController(
+      _FakeLlmService([
+        const LlmResponse(
+          tipoRespuesta: TipoRespuesta.consultaReporte,
+          mensajeParaUsuario: '',
+          datosTransaccion: null,
+          datosConsulta: DatosConsulta(tipoConsulta: 'viabilidad'),
+        ),
+      ]),
+      repo,
+    );
+
+    await controller.sendMessage('¿es viable comprar?');
+
+    expect(controller.state.messages.last.text, contains('¿De cuánto'));
   });
 }
 
