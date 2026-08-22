@@ -1,10 +1,13 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/chat_message.dart';
 import '../models/llm_response.dart';
+import '../models/resumen_analisis.dart';
 import '../models/totales_mes.dart';
+import '../models/ultima_transaccion.dart';
 import '../services/llm_service.dart';
 import '../services/supabase_repository.dart';
 import 'supabase_provider.dart';
@@ -162,17 +165,10 @@ class ChatController extends StateNotifier<ChatState> {
       }
 
       if (response.tipoRespuesta == TipoRespuesta.consultaReporte) {
-        try {
-          final totales = await _repo.obtenerTotalesMes();
-          _addReportMessage(
-            response.mensajeParaUsuario.isEmpty
-                ? 'Estos son tus totales del mes.'
-                : response.mensajeParaUsuario,
-            totales,
-          );
-        } on Exception catch (e) {
-          _addAssistantMessage('No se pudieron calcular los totales: $e');
-        }
+        await _manejarConsulta(
+          response.datosConsulta,
+          response.mensajeParaUsuario,
+        );
         return;
       }
 
@@ -236,6 +232,90 @@ class ChatController extends StateNotifier<ChatState> {
       isSending: false,
       isSaving: false,
     );
+  }
+
+  Future<void> _manejarConsulta(
+    DatosConsulta? consulta,
+    String mensajeDelLlm,
+  ) async {
+    switch (consulta?.tipoConsulta) {
+      case 'analisis':
+        await _manejarAnalisis();
+        break;
+      case 'ultima_transaccion':
+        await _manejarUltimaTransaccion(consulta!);
+        break;
+      default:
+        try {
+          final totales = await _repo.obtenerTotalesMes();
+          _addReportMessage(
+            mensajeDelLlm.isEmpty
+                ? 'Estos son tus totales del mes.'
+                : mensajeDelLlm,
+            totales,
+          );
+        } on Exception catch (e) {
+          _addAssistantMessage('No se pudieron calcular los totales: $e');
+        }
+    }
+  }
+
+  Future<void> _manejarAnalisis() async {
+    try {
+      final resumen = await _repo.obtenerResumenAnalisis();
+      final analisis = await _llm.analizar(resumen: _formatearResumen(resumen));
+      _addAssistantMessage(analisis);
+    } on Exception catch (e) {
+      _addAssistantMessage('No se pudo hacer el análisis: $e');
+    }
+  }
+
+  Future<void> _manejarUltimaTransaccion(DatosConsulta consulta) async {
+    try {
+      final tipo = consulta.tipo == 'ingreso' || consulta.tipo == 'egreso'
+          ? consulta.tipo
+          : null;
+      final ultima = await _repo.ultimaTransaccion(tipo: tipo);
+
+      if (ultima == null) {
+        _addAssistantMessage(
+          'Aún no hay ${tipo == 'ingreso' ? 'ventas' : tipo == 'egreso' ? 'egresos' : 'transacciones'} registradas.',
+        );
+        return;
+      }
+
+      _addAssistantMessage(_formatearUltimaTransaccion(ultima),
+          tipoMovimiento: ultima.tipo);
+    } on Exception catch (e) {
+      _addAssistantMessage('No se pudo consultar la última transacción: $e');
+    }
+  }
+
+  String _formatearUltimaTransaccion(UltimaTransaccion ultima) {
+    final esIngreso = ultima.tipo == 'ingreso';
+    final palabra = esIngreso ? 'última venta' : 'último egreso';
+    final fecha = DateFormat('dd/MM/yyyy').format(ultima.fecha);
+    return '$palabra: Q${ultima.monto.toStringAsFixed(2)} '
+        'en ${ultima.categoria} (el $fecha).';
+  }
+
+  String _formatearResumen(ResumenAnalisis resumen) {
+    final buffer = StringBuffer()
+      ..writeln('Resumen del mes actual (montos en quetzales):')
+      ..writeln('Ingresos: Q${resumen.ingresos.toStringAsFixed(2)} '
+          '(${resumen.cantidadIngresos} movimientos)')
+      ..writeln('Egresos: Q${resumen.egresos.toStringAsFixed(2)} '
+          '(${resumen.cantidadEgresos} movimientos)')
+      ..writeln('Balance: Q${resumen.balance.toStringAsFixed(2)}');
+
+    if (resumen.porCategoria.isNotEmpty) {
+      buffer.writeln('Desglose por categoría:');
+      for (final c in resumen.porCategoria) {
+        buffer.writeln('- ${c.nombre} (${c.tipo}): '
+            'Q${c.total.toStringAsFixed(2)} (${c.cantidad})');
+      }
+    }
+    return buffer.toString();
   }
 
   void _addReportMessage(String text, TotalesMes totales) {

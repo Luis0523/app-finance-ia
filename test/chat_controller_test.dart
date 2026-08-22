@@ -12,6 +12,8 @@ class _FakeLlmService extends LlmService {
 
   final List<LlmResponse> responses;
   int calls = 0;
+  int analisisLlamadas = 0;
+  String? ultimoResumen;
   List<List<ChatMessage>> historiales = [];
 
   @override
@@ -26,6 +28,13 @@ class _FakeLlmService extends LlmService {
     final index = calls;
     calls++;
     return responses[index];
+  }
+
+  @override
+  Future<String> analizar({required String resumen}) async {
+    analisisLlamadas++;
+    ultimoResumen = resumen;
+    return 'Vas bien: balance positivo y ventas por encima de tus gastos.';
   }
 }
 
@@ -71,6 +80,27 @@ LlmResponse _consultaReporte() {
     mensajeParaUsuario: 'Te muestro tus totales del mes.',
     datosTransaccion: null,
     datosConsulta: DatosConsulta(tipoReporte: 'ambos', periodo: 'mes_actual'),
+  );
+}
+
+LlmResponse _consultaUltima() {
+  return const LlmResponse(
+    tipoRespuesta: TipoRespuesta.consultaReporte,
+    mensajeParaUsuario: 'Aquí está tu último movimiento.',
+    datosTransaccion: null,
+    datosConsulta: DatosConsulta(
+      tipoConsulta: 'ultima_transaccion',
+      tipo: 'egreso',
+    ),
+  );
+}
+
+LlmResponse _consultaAnalisis() {
+  return const LlmResponse(
+    tipoRespuesta: TipoRespuesta.consultaReporte,
+    mensajeParaUsuario: 'Aquí va mi análisis.',
+    datosTransaccion: null,
+    datosConsulta: DatosConsulta(tipoConsulta: 'analisis'),
   );
 }
 
@@ -272,6 +302,38 @@ void main() {
     expect(controller.state.pendingTransaction, isNotNull);
     expect(controller.state.isSaving, isFalse);
     expect(controller.state.messages.last.text, contains('No se pudo guardar'));
+  });
+
+  test('consulta de última transacción muestra el último egreso', () async {
+    final repo = FakeRepository();
+    final controller = ChatController(_FakeLlmService([_consultaUltima()]), repo);
+
+    await controller.sendMessage('¿cuál fue mi último egreso?');
+
+    final message = controller.state.messages.last;
+    expect(message.isUser, isFalse);
+    expect(message.tipoMovimiento, 'egreso');
+    expect(message.text, contains('último egreso: Q150.00'));
+    expect(message.text, contains('Servicios públicos'));
+    expect(repo.ultimaConsultas, 1);
+    expect(controller.state.pendingTransaction, isNull);
+  });
+
+  test('consulta de análisis usa el resumen agregado y responde análisis', () async {
+    final repo = FakeRepository();
+    final llm = _FakeLlmService([_consultaAnalisis()]);
+    final controller = ChatController(llm, repo);
+
+    await controller.sendMessage('¿qué tal ves mi balance?');
+
+    final message = controller.state.messages.last;
+    expect(message.isUser, isFalse);
+    expect(message.text, contains('balance positivo'));
+    expect(repo.resumenConsultas, 1);
+    expect(llm.analisisLlamadas, 1);
+    expect(llm.ultimoResumen, contains('Ingresos: Q500.00'));
+    expect(llm.ultimoResumen, contains('Desglose por categoría'));
+    expect(llm.ultimoResumen, contains('Venta de producto'));
   });
 }
 

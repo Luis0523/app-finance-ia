@@ -55,7 +55,13 @@ préstamo, retiro), usa tipo_respuesta = "transaccion" y llena datos_transaccion
 Si es un saludo, pregunta general o algo ambiguo sin datos financieros claros,
 usa tipo_respuesta = "conversacion".
 Si el usuario pide un reporte o resumen (totales, cuánto gastó/ganó), usa
-tipo_respuesta = "consulta_reporte" y llena datos_consulta.
+tipo_respuesta = "consulta_reporte" y llena datos_consulta. Dentro de
+datos_consulta elige tipo_consulta:
+- "analisis" cuando pida opinión o evaluación ("¿qué tal ves mi balance?",
+  "¿cómo voy?", "analízame").
+- "ultima_transaccion" cuando pregunte por la última venta, compra, gasto o
+  movimiento (usa "tipo": "ingreso" o "egreso" para filtrar).
+- "totales" para montos o resúmenes numéricos del periodo.
 
 Usa los mensajes anteriores de la conversación como contexto para interpretar el
 mensaje actual (por ejemplo, si el usuario dice "y esto" o "esa fruta", refiere a
@@ -89,9 +95,17 @@ algo ya mencionado).
           'datos_consulta': {
             'type': ['object', 'null'],
             'properties': {
+              'tipo_consulta': {
+                'type': 'string',
+                'enum': ['totales', 'ultima_transaccion', 'analisis'],
+              },
               'tipo_reporte': {
                 'type': 'string',
                 'enum': ['ingresos', 'egresos', 'ambos'],
+              },
+              'tipo': {
+                'type': ['string', 'null'],
+                'enum': ['ingreso', 'egreso'],
               },
               'periodo': {
                 'type': 'string',
@@ -202,6 +216,67 @@ algo ya mencionado).
   }
 
   static const _maxReintentos = 2;
+
+  static const analisisPrompt = '''
+Eres un analista financiero para microempresarios guatemaltecos. Recibes un
+resumen numérico del negocio (montos en quetzales). Responde en español, breve
+(máximo 4-5 líneas), en lenguaje natural y directo: señala el balance, cómo van
+los ingresos frente a los egresos, las categorías más relevantes, cualquier riesgo
+o alerta, y una recomendación concreta. No inventes números que no estén en el
+resumen.
+''';
+
+  Future<String> analizar({required String resumen}) async {
+    if (_apiKey.isEmpty || _apiKey.contains('tu_key')) {
+      throw LlmException(
+        'LLM_API_KEY no configurada en .env (usa la key de DeepSeek/OpenAI).',
+      );
+    }
+
+    final endpoint = '${_baseUrl.replaceAll(RegExp(r'/$'), '')}/chat/completions';
+
+    for (var intento = 0; intento <= _maxReintentos; intento++) {
+      try {
+        final response = await _dio.post(
+          endpoint,
+          options: Options(
+            headers: {
+              'Authorization': 'Bearer $_apiKey',
+              'Content-Type': 'application/json',
+            },
+          ),
+          data: {
+            'model': _model,
+            'messages': [
+              {'role': 'system', 'content': analisisPrompt},
+              {'role': 'user', 'content': resumen},
+            ],
+            'temperature': 0.6,
+            'max_tokens': 600,
+          },
+        );
+
+        final content = response.data['choices'][0]['message']['content'];
+        final texto = content?.toString().trim() ?? '';
+        if (texto.isNotEmpty) return texto;
+        if (intento < _maxReintentos) {
+          await _esperaReintento(intento);
+          continue;
+        }
+        throw LlmException('El LLM devolvió un análisis vacío.');
+      } on DioException catch (e) {
+        if (intento < _maxReintentos) {
+          await _esperaReintento(intento);
+          continue;
+        }
+        throw LlmException(
+          'Error del LLM: ${e.response?.statusCode ?? e.type} '
+          '— ${e.response?.data ?? e.message}',
+        );
+      }
+    }
+    throw LlmException('No se pudo obtener el análisis del LLM.');
+  }
 
   Future<void> _esperaReintento(int intento) {
     return Future.delayed(Duration(milliseconds: 600 * (intento + 1)));

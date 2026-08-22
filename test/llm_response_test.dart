@@ -84,6 +84,25 @@ void main() {
     expect(response.datosConsulta!.categoriaNivel1, isNull);
   });
 
+  test('parsea tipo_consulta y tipo en datos_consulta', () {
+    const json = '''
+    {
+      "tipo_respuesta": "consulta_reporte",
+      "mensaje_para_usuario": "",
+      "datos_transaccion": null,
+      "datos_consulta": {
+        "tipo_consulta": "ultima_transaccion",
+        "tipo": "ingreso"
+      }
+    }
+    ''';
+
+    final response = LlmResponse.fromJson(json);
+
+    expect(response.datosConsulta!.tipoConsulta, 'ultima_transaccion');
+    expect(response.datosConsulta!.tipo, 'ingreso');
+  });
+
   test('monto numérico como string se convierte a double', () {
     const json = '''
     {

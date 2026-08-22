@@ -1,6 +1,8 @@
 import 'package:supabase/supabase.dart';
 
+import '../models/resumen_analisis.dart';
 import '../models/totales_mes.dart';
+import '../models/ultima_transaccion.dart';
 
 class PersistException implements Exception {
   PersistException(this.message);
@@ -40,6 +42,10 @@ abstract class FinanzasRepository {
   });
 
   Future<TotalesMes> obtenerTotalesMes();
+
+  Future<ResumenAnalisis> obtenerResumenAnalisis();
+
+  Future<UltimaTransaccion?> ultimaTransaccion({String? tipo});
 }
 
 class SupabaseRepository implements FinanzasRepository {
@@ -207,7 +213,8 @@ class SupabaseRepository implements FinanzasRepository {
       params: {'p_negocio_id': negocioId},
     );
 
-    if (rows.isEmpty) {
+    final row = _filaDe(rows);
+    if (row == null) {
       return const TotalesMes(
         ingresos: 0,
         egresos: 0,
@@ -216,12 +223,85 @@ class SupabaseRepository implements FinanzasRepository {
       );
     }
 
-    final row = rows.first as Map<String, dynamic>;
     return TotalesMes(
       ingresos: (row['ingresos'] as num?)?.toDouble() ?? 0,
       egresos: (row['egresos'] as num?)?.toDouble() ?? 0,
       cantidadIngresos: (row['cantidad_ingresos'] as num?)?.toInt() ?? 0,
       cantidadEgresos: (row['cantidad_egresos'] as num?)?.toInt() ?? 0,
     );
+  }
+
+  @override
+  Future<ResumenAnalisis> obtenerResumenAnalisis() async {
+    await _asegurarDatosPrueba();
+    final negocioId = _negocioId!;
+
+    final rows = await _client.rpc(
+      'obtener_resumen_analisis',
+      params: {'p_negocio_id': negocioId},
+    );
+
+    final row = _filaDe(rows);
+    if (row == null) return ResumenAnalisis.vacio();
+
+    final porCategoria = (row['por_categoria'] as List<dynamic>? ?? [])
+        .map((item) {
+          final e = item as Map<String, dynamic>;
+          return ResumenCategoria(
+            categoriaNivel1: e['categoria_nivel1']?.toString() ?? '',
+            categoriaNivel2: e['categoria_nivel2']?.toString() ?? '',
+            tipo: e['tipo']?.toString() ?? '',
+            total: (e['total'] as num?)?.toDouble() ?? 0,
+            cantidad: (e['cantidad'] as num?)?.toInt() ?? 0,
+          );
+        })
+        .toList();
+
+    return ResumenAnalisis(
+      ingresos: (row['ingresos'] as num?)?.toDouble() ?? 0,
+      egresos: (row['egresos'] as num?)?.toDouble() ?? 0,
+      cantidadIngresos: (row['cantidad_ingresos'] as num?)?.toInt() ?? 0,
+      cantidadEgresos: (row['cantidad_egresos'] as num?)?.toInt() ?? 0,
+      porCategoria: porCategoria,
+    );
+  }
+
+  @override
+  Future<UltimaTransaccion?> ultimaTransaccion({String? tipo}) async {
+    await _asegurarDatosPrueba();
+    final negocioId = _negocioId!;
+
+    final rows = await _client.rpc(
+      'obtener_ultima_transaccion',
+      params: {
+        'p_negocio_id': negocioId,
+        'p_tipo': ?tipo,
+      },
+    );
+
+    final row = _filaDe(rows);
+    if (row == null) return null;
+
+    return UltimaTransaccion(
+      monto: (row['monto'] as num?)?.toDouble() ?? 0,
+      tipo: row['tipo']?.toString() ?? '',
+      fecha: DateTime.tryParse(row['fecha']?.toString() ?? '') ?? DateTime.now(),
+      descripcion: row['descripcion_normalizada']?.toString(),
+      categoriaNivel1: row['categoria_nivel1']?.toString(),
+      categoriaNivel2: row['categoria_nivel2']?.toString(),
+    );
+  }
+
+  /// Los RPC que devuelven `jsonb` regresan un Map directo; los que devuelven
+  /// tabla regresan una lista. Normaliza a un mapa único o null.
+  Map<String, dynamic>? _filaDe(dynamic rows) {
+    if (rows == null) return null;
+    if (rows is Map) return Map<String, dynamic>.from(rows);
+    if (rows is List) {
+      if (rows.isEmpty) return null;
+      final first = rows.first;
+      if (first is Map) return Map<String, dynamic>.from(first);
+    }
+    return null;
   }
 }

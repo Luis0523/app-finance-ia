@@ -53,13 +53,21 @@ class DatosTransaccion {
 
 class DatosConsulta {
   const DatosConsulta({
+    this.tipoConsulta,
     this.tipoReporte,
+    this.tipo,
     this.periodo,
     this.categoriaNivel1,
   });
 
+  /// 'totales' | 'ultima_transaccion' | 'analisis' | null
+  final String? tipoConsulta;
+
   /// 'ingresos' | 'egresos' | 'ambos' | null
   final String? tipoReporte;
+
+  /// Filtro de tipo: 'ingreso' | 'egreso' | null
+  final String? tipo;
 
   /// 'hoy' | 'mes_actual' | 'mes_pasado' | null
   final String? periodo;
@@ -68,7 +76,9 @@ class DatosConsulta {
   final String? categoriaNivel1;
 
   factory DatosConsulta.fromMap(Map<String, dynamic> map) => DatosConsulta(
+        tipoConsulta: map['tipo_consulta']?.toString(),
         tipoReporte: map['tipo_reporte']?.toString(),
+        tipo: map['tipo']?.toString(),
         periodo: map['periodo']?.toString(),
         categoriaNivel1: map['categoria_nivel1']?.toString(),
       );
