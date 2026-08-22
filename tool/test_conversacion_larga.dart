@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:finanzas_ia/models/chat_message.dart';
-import 'package:finanzas_ia/services/llm_service.dart';
+import 'package:finanzas_ia/services/llm_config.dart';
 
 Future<void> main() async {
   final env = <String, String>{};
@@ -14,11 +14,7 @@ Future<void> main() async {
     env[trimmed.substring(0, idx).trim()] = trimmed.substring(idx + 1).trim();
   }
 
-  final service = LlmService(
-    apiKey: env['LLM_API_KEY'] ?? '',
-    baseUrl: env['LLM_BASE_URL'] ?? 'https://api.deepseek.com',
-    model: env['LLM_MODEL'] ?? 'deepseek-chat',
-  );
+  final service = llmServiceFromEnv(env);
 
   final frases = [
     'hola, buenos días',
@@ -40,18 +36,22 @@ Future<void> main() async {
     try {
       final r = await service.classify(text: frase, historial: historial);
       stdout.writeln('  -> ${r.tipoRespuesta} | ${r.mensajeParaUsuario}');
-      historial.add(ChatMessage(
-        id: 'u$i',
-        text: frase,
-        isUser: true,
-        timestamp: DateTime.now(),
-      ));
-      historial.add(ChatMessage(
-        id: 'a$i',
-        text: r.mensajeParaUsuario,
-        isUser: false,
-        timestamp: DateTime.now(),
-      ));
+      historial.add(
+        ChatMessage(
+          id: 'u$i',
+          text: frase,
+          isUser: true,
+          timestamp: DateTime.now(),
+        ),
+      );
+      historial.add(
+        ChatMessage(
+          id: 'a$i',
+          text: r.mensajeParaUsuario,
+          isUser: false,
+          timestamp: DateTime.now(),
+        ),
+      );
     } catch (e) {
       stdout.writeln('  -> ERROR: $e');
     }

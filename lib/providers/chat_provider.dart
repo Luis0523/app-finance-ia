@@ -10,6 +10,7 @@ import '../models/resumen_analisis.dart';
 import '../models/tabla_datos.dart';
 import '../models/totales_mes.dart';
 import '../models/ultima_transaccion.dart';
+import '../services/llm_config.dart';
 import '../services/llm_service.dart';
 import '../services/supabase_repository.dart';
 import 'supabase_provider.dart';
@@ -132,10 +133,7 @@ class ChatController extends StateNotifier<ChatState> {
     state = state.copyWith(isSending: true);
 
     try {
-      final response = await _llm.classify(
-        text: trimmed,
-        historial: historial,
-      );
+      final response = await _llm.classify(text: trimmed, historial: historial);
 
       final intencion = _intencionDe(response.tipoRespuesta);
       String? conversacionId;
@@ -155,7 +153,9 @@ class ChatController extends StateNotifier<ChatState> {
 
         // Si falta el monto pero hay desglose, lo calculamos.
         if (datos.monto <= 0 && datos.tieneDesglose) {
-          datos = datos.copyWith(monto: datos.cantidad! * datos.precioUnitario!);
+          datos = datos.copyWith(
+            monto: datos.cantidad! * datos.precioUnitario!,
+          );
         }
 
         // Sin monto: pedirlo de forma conversacional antes de registrar.
@@ -309,13 +309,19 @@ class ChatController extends StateNotifier<ChatState> {
 
       if (ultima == null) {
         _addAssistantMessage(
-          'Aún no hay ${tipo == 'ingreso' ? 'ventas' : tipo == 'egreso' ? 'egresos' : 'transacciones'} registradas.',
+          'Aún no hay ${tipo == 'ingreso'
+              ? 'ventas'
+              : tipo == 'egreso'
+              ? 'egresos'
+              : 'transacciones'} registradas.',
         );
         return;
       }
 
-      _addAssistantMessage(_formatearUltimaTransaccion(ultima),
-          tipoMovimiento: ultima.tipo);
+      _addAssistantMessage(
+        _formatearUltimaTransaccion(ultima),
+        tipoMovimiento: ultima.tipo,
+      );
     } on Exception catch (e) {
       _addAssistantMessage('No se pudo consultar la última transacción: $e');
     }
@@ -330,7 +336,11 @@ class ChatController extends StateNotifier<ChatState> {
 
       if (lista.isEmpty) {
         _addAssistantMessage(
-          'Aún no hay ${tipo == 'ingreso' ? 'ingresos' : tipo == 'egreso' ? 'egresos' : 'movimientos'} registrados.',
+          'Aún no hay ${tipo == 'ingreso'
+              ? 'ingresos'
+              : tipo == 'egreso'
+              ? 'egresos'
+              : 'movimientos'} registrados.',
         );
         return;
       }
@@ -338,8 +348,8 @@ class ChatController extends StateNotifier<ChatState> {
       final titulo = tipo == 'ingreso'
           ? 'Mis ingresos'
           : tipo == 'egreso'
-              ? 'Mis egresos'
-              : 'Mis movimientos';
+          ? 'Mis egresos'
+          : 'Mis movimientos';
       final tabla = TablaDatos(
         titulo: titulo,
         headers: const [
@@ -353,18 +363,18 @@ class ChatController extends StateNotifier<ChatState> {
         columnaColor: 5,
         tipos: lista.map((t) => t.tipo).toList(),
         rows: lista
-            .map((t) => [
-                  DateFormat('dd/MM').format(t.fecha),
-                  t.categoria,
-                  (t.descripcion?.isNotEmpty ?? false)
-                      ? t.descripcion!
-                      : '—',
-                  t.cantidad != null ? t.cantidad!.toStringAsFixed(0) : '—',
-                  t.precioUnitario != null
-                      ? 'Q${t.precioUnitario!.toStringAsFixed(2)}'
-                      : '—',
-                  'Q${t.monto.toStringAsFixed(2)}',
-                ])
+            .map(
+              (t) => [
+                DateFormat('dd/MM').format(t.fecha),
+                t.categoria,
+                (t.descripcion?.isNotEmpty ?? false) ? t.descripcion! : '—',
+                t.cantidad != null ? t.cantidad!.toStringAsFixed(0) : '—',
+                t.precioUnitario != null
+                    ? 'Q${t.precioUnitario!.toStringAsFixed(2)}'
+                    : '—',
+                'Q${t.monto.toStringAsFixed(2)}',
+              ],
+            )
             .toList(),
       );
       _addTablaMessage(
@@ -389,16 +399,16 @@ class ChatController extends StateNotifier<ChatState> {
         titulo: 'Flujo de caja del mes',
         headers: const ['Fecha', 'Ingresos', 'Egresos', 'Balance'],
         columnaColor: 3,
-        tipos: dias
-            .map((d) => d.balance >= 0 ? 'ingreso' : 'egreso')
-            .toList(),
+        tipos: dias.map((d) => d.balance >= 0 ? 'ingreso' : 'egreso').toList(),
         rows: dias
-            .map((d) => [
-                  DateFormat('dd/MM').format(d.fecha),
-                  'Q${d.ingresos.toStringAsFixed(2)}',
-                  'Q${d.egresos.toStringAsFixed(2)}',
-                  'Q${d.balance.toStringAsFixed(2)}',
-                ])
+            .map(
+              (d) => [
+                DateFormat('dd/MM').format(d.fecha),
+                'Q${d.ingresos.toStringAsFixed(2)}',
+                'Q${d.egresos.toStringAsFixed(2)}',
+                'Q${d.balance.toStringAsFixed(2)}',
+              ],
+            )
             .toList(),
       );
       _addTablaMessage(
@@ -420,18 +430,22 @@ class ChatController extends StateNotifier<ChatState> {
       }
 
       final valorTotal = productos.fold<double>(
-          0, (acc, p) => acc + p.valorTotal);
+        0,
+        (acc, p) => acc + p.valorTotal,
+      );
       final tabla = TablaDatos(
         titulo: 'Inventario ($productos.length productos)',
         headers: const ['Producto', 'Compra', 'Venta', 'Exist.', 'Valor'],
         rows: productos
-            .map((p) => [
-                  p.nombre,
-                  'Q${p.precioCompra.toStringAsFixed(2)}',
-                  'Q${p.precioVenta.toStringAsFixed(2)}',
-                  p.existencias.toStringAsFixed(0),
-                  'Q${p.valorTotal.toStringAsFixed(2)}',
-                ])
+            .map(
+              (p) => [
+                p.nombre,
+                'Q${p.precioCompra.toStringAsFixed(2)}',
+                'Q${p.precioVenta.toStringAsFixed(2)}',
+                p.existencias.toStringAsFixed(0),
+                'Q${p.valorTotal.toStringAsFixed(2)}',
+              ],
+            )
             .toList(),
       );
       final texto = mensaje.isEmpty
@@ -471,18 +485,26 @@ class ChatController extends StateNotifier<ChatState> {
     ResumenAnalisis resumen,
     List<ProductoInventario> productos,
   ) {
-    final valorInventario =
-        productos.fold<double>(0, (acc, p) => acc + p.valorTotal);
+    final valorInventario = productos.fold<double>(
+      0,
+      (acc, p) => acc + p.valorTotal,
+    );
     final buffer = StringBuffer()
       ..writeln('Plan de compra: Q${monto.toStringAsFixed(2)}')
       ..writeln('Resumen del mes actual (montos en quetzales):')
-      ..writeln('Ingresos: Q${resumen.ingresos.toStringAsFixed(2)} '
-          '(${resumen.cantidadIngresos} movimientos)')
-      ..writeln('Egresos: Q${resumen.egresos.toStringAsFixed(2)} '
-          '(${resumen.cantidadEgresos} movimientos)')
+      ..writeln(
+        'Ingresos: Q${resumen.ingresos.toStringAsFixed(2)} '
+        '(${resumen.cantidadIngresos} movimientos)',
+      )
+      ..writeln(
+        'Egresos: Q${resumen.egresos.toStringAsFixed(2)} '
+        '(${resumen.cantidadEgresos} movimientos)',
+      )
       ..writeln('Balance: Q${resumen.balance.toStringAsFixed(2)}')
-      ..writeln('Valor total del inventario actual: '
-          'Q${valorInventario.toStringAsFixed(2)}');
+      ..writeln(
+        'Valor total del inventario actual: '
+        'Q${valorInventario.toStringAsFixed(2)}',
+      );
     return buffer.toString();
   }
 
@@ -497,17 +519,23 @@ class ChatController extends StateNotifier<ChatState> {
   String _formatearResumen(ResumenAnalisis resumen) {
     final buffer = StringBuffer()
       ..writeln('Resumen del mes actual (montos en quetzales):')
-      ..writeln('Ingresos: Q${resumen.ingresos.toStringAsFixed(2)} '
-          '(${resumen.cantidadIngresos} movimientos)')
-      ..writeln('Egresos: Q${resumen.egresos.toStringAsFixed(2)} '
-          '(${resumen.cantidadEgresos} movimientos)')
+      ..writeln(
+        'Ingresos: Q${resumen.ingresos.toStringAsFixed(2)} '
+        '(${resumen.cantidadIngresos} movimientos)',
+      )
+      ..writeln(
+        'Egresos: Q${resumen.egresos.toStringAsFixed(2)} '
+        '(${resumen.cantidadEgresos} movimientos)',
+      )
       ..writeln('Balance: Q${resumen.balance.toStringAsFixed(2)}');
 
     if (resumen.porCategoria.isNotEmpty) {
       buffer.writeln('Desglose por categoría:');
       for (final c in resumen.porCategoria) {
-        buffer.writeln('- ${c.nombre} (${c.tipo}): '
-            'Q${c.total.toStringAsFixed(2)} (${c.cantidad})');
+        buffer.writeln(
+          '- ${c.nombre} (${c.tipo}): '
+          'Q${c.total.toStringAsFixed(2)} (${c.cantidad})',
+        );
       }
     }
     return buffer.toString();
@@ -552,9 +580,8 @@ class ChatController extends StateNotifier<ChatState> {
     try {
       await _persistir(pending).timeout(
         const Duration(seconds: 45),
-        onTimeout: () => throw PersistException(
-          'Tiempo de espera agotado al guardar.',
-        ),
+        onTimeout: () =>
+            throw PersistException('Tiempo de espera agotado al guardar.'),
       );
 
       final d = pending.datos;
@@ -565,7 +592,7 @@ class ChatController extends StateNotifier<ChatState> {
           : d.categoriaNivel1Sugerida;
       final desglose = d.tieneDesglose
           ? ' (${d.cantidad!.toStringAsFixed(0)} × '
-              'Q${d.precioUnitario!.toStringAsFixed(2)})'
+                'Q${d.precioUnitario!.toStringAsFixed(2)})'
           : '';
       _addAssistantMessage(
         '✓ Registrado: $tipo de $monto$desglose en $categoria.',
@@ -589,7 +616,7 @@ class ChatController extends StateNotifier<ChatState> {
       monto: pending.datos.monto,
       tipo: pending.datos.tipo,
       descripcionOriginal: pending.descripcionOriginal,
-      descripcionNormalizada: pending.mensajeParaUsuario,
+      descripcionNormalizada: _descripcionNormalizada(pending.datos),
       origen: pending.origen,
       confianza: pending.datos.confianza,
       cantidad: pending.datos.cantidad,
@@ -603,6 +630,19 @@ class ChatController extends StateNotifier<ChatState> {
         transaccionId: transaccionId,
       );
     }
+  }
+
+  String _descripcionNormalizada(DatosTransaccion datos) {
+    final descripcion = datos.descripcionNormalizada?.trim();
+    if (descripcion != null && descripcion.isNotEmpty) return descripcion;
+
+    final categoria = datos.categoriaNivel2Sugerida.trim().isNotEmpty
+        ? datos.categoriaNivel2Sugerida.trim()
+        : datos.categoriaNivel1Sugerida.trim();
+    if (categoria.isEmpty) return 'Transacción';
+
+    final prefijo = datos.tipo == 'ingreso' ? 'Venta' : 'Compra';
+    return '$prefijo de ${categoria.toLowerCase()}';
   }
 
   void updatePendingTransaction({
@@ -633,15 +673,10 @@ class ChatController extends StateNotifier<ChatState> {
 }
 
 final llmServiceProvider = Provider<LlmService>((ref) {
-  return LlmService(
-    apiKey: dotenv.env['LLM_API_KEY'] ?? '',
-    baseUrl: dotenv.env['LLM_BASE_URL'] ?? 'https://api.deepseek.com',
-    model: dotenv.env['LLM_MODEL'] ?? 'deepseek-chat',
-  );
+  return llmServiceFromEnv(dotenv.env);
 });
 
-final chatControllerProvider =
-    StateNotifierProvider<ChatController, ChatState>(
+final chatControllerProvider = StateNotifierProvider<ChatController, ChatState>(
   (ref) => ChatController(
     ref.watch(llmServiceProvider),
     ref.watch(supabaseRepositoryProvider),

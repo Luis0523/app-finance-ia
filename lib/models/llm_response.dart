@@ -25,6 +25,7 @@ class DatosTransaccion {
     required this.categoriaNivel1Sugerida,
     required this.categoriaNivel2Sugerida,
     required this.confianza,
+    this.descripcionNormalizada,
     this.cantidad,
     this.precioUnitario,
   });
@@ -34,6 +35,7 @@ class DatosTransaccion {
   final String categoriaNivel1Sugerida;
   final String categoriaNivel2Sugerida;
   final double confianza;
+  final String? descripcionNormalizada;
 
   /// Número de unidades (opcional).
   final double? cantidad;
@@ -51,6 +53,7 @@ class DatosTransaccion {
       categoriaNivel2Sugerida:
           map['categoria_nivel2_sugerida']?.toString() ?? '',
       confianza: _asDouble(map['confianza']),
+      descripcionNormalizada: map['descripcion_normalizada']?.toString(),
       cantidad: _asDoubleOrNull(map['cantidad']),
       precioUnitario: _asDoubleOrNull(map['precio_unitario']),
     );
@@ -62,6 +65,7 @@ class DatosTransaccion {
     String? categoriaNivel1Sugerida,
     String? categoriaNivel2Sugerida,
     double? confianza,
+    String? descripcionNormalizada,
     double? cantidad,
     double? precioUnitario,
   }) {
@@ -73,6 +77,8 @@ class DatosTransaccion {
       categoriaNivel2Sugerida:
           categoriaNivel2Sugerida ?? this.categoriaNivel2Sugerida,
       confianza: confianza ?? this.confianza,
+      descripcionNormalizada:
+          descripcionNormalizada ?? this.descripcionNormalizada,
       cantidad: cantidad ?? this.cantidad,
       precioUnitario: precioUnitario ?? this.precioUnitario,
     );

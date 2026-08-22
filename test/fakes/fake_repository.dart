@@ -24,6 +24,8 @@ class FakeRepository implements FinanzasRepository {
   String? lastTransaccionId;
   String? lastConversacionId;
   String? ultimoTipoListado;
+  String? lastDescripcionOriginal;
+  String? lastDescripcionNormalizada;
   TotalesMes totalesMes = const TotalesMes(
     ingresos: 500,
     egresos: 300,
@@ -120,6 +122,8 @@ class FakeRepository implements FinanzasRepository {
     if (failOnPersist) throw PersistException('error simulado de persistencia');
     transacciones++;
     lastTransaccionId = 'transaccion-$transacciones';
+    lastDescripcionOriginal = descripcionOriginal;
+    lastDescripcionNormalizada = descripcionNormalizada;
     return lastTransaccionId!;
   }
 

@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:finanzas_ia/models/llm_response.dart';
-import 'package:finanzas_ia/services/llm_service.dart';
+import 'package:finanzas_ia/services/llm_config.dart';
 
 class _Caso {
   const _Caso(this.mensaje, this.esperado, {this.comentario});
@@ -16,19 +16,31 @@ const _casos = [
   _Caso('compré mercadería por Q150 en el mercado', TipoRespuesta.transaccion),
   _Caso('pagué la renta del local, Q500', TipoRespuesta.transaccion),
   _Caso('recibí Q50 de comisión por venta', TipoRespuesta.transaccion),
-  _Caso('le puse Q300 de gasolina al carro del negocio', TipoRespuesta.transaccion),
+  _Caso(
+    'le puse Q300 de gasolina al carro del negocio',
+    TipoRespuesta.transaccion,
+  ),
   _Caso('saqué Q200 para mis gastos personales', TipoRespuesta.transaccion),
   _Caso('me prestaron Q2000 del banco', TipoRespuesta.transaccion),
-  _Caso('compré una refrigeradora en Q1500 para la tienda', TipoRespuesta.transaccion),
+  _Caso(
+    'compré una refrigeradora en Q1500 para la tienda',
+    TipoRespuesta.transaccion,
+  ),
   _Caso('le pagué Q100 al muchacho por el reparto', TipoRespuesta.transaccion),
-  _Caso('pagué la luz del negocio', TipoRespuesta.transaccion,
-      comentario: 'Sin monto, pero es transacción'),
+  _Caso(
+    'pagué la luz del negocio',
+    TipoRespuesta.conversacion,
+    comentario: 'Sin monto: debe pedir el monto antes de registrar',
+  ),
   _Caso('hola', TipoRespuesta.conversacion),
   _Caso('buenos días, que tal', TipoRespuesta.conversacion),
   _Caso('¿cómo estás?', TipoRespuesta.conversacion),
   _Caso('gracias', TipoRespuesta.conversacion),
-  _Caso('ayer vendí bastante', TipoRespuesta.conversacion,
-      comentario: 'Ambiguo, sin dato financiero claro'),
+  _Caso(
+    'ayer vendí bastante',
+    TipoRespuesta.conversacion,
+    comentario: 'Ambiguo, sin dato financiero claro',
+  ),
   _Caso('¿cuánto tengo de ingresos este mes?', TipoRespuesta.consultaReporte),
   _Caso('muéstrame mis gastos', TipoRespuesta.consultaReporte),
   _Caso('pásame un reporte de ventas', TipoRespuesta.consultaReporte),
@@ -45,17 +57,11 @@ Future<void> main() async {
     env[trimmed.substring(0, idx).trim()] = trimmed.substring(idx + 1).trim();
   }
 
-  final apiKey = env['LLM_API_KEY'] ?? '';
-  if (apiKey.isEmpty || apiKey.contains('tu_key')) {
-    stderr.writeln('ERROR: LLM_API_KEY no configurada en .env');
+  final service = llmServiceFromEnv(env);
+  if (service.apiKey.isEmpty || service.apiKey.contains('tu_key')) {
+    stderr.writeln('ERROR: API key del LLM no configurada en .env');
     exit(1);
   }
-
-  final service = LlmService(
-    apiKey: apiKey,
-    baseUrl: env['LLM_BASE_URL'] ?? 'https://api.deepseek.com',
-    model: env['LLM_MODEL'] ?? 'deepseek-chat',
-  );
 
   stdout.writeln('Proveedor: ${service.baseUrl} | Modelo: ${service.model}');
   stdout.writeln('Probando ${_casos.length} mensajes reales...\n');
@@ -75,14 +81,18 @@ Future<void> main() async {
 
       final icono = ok ? 'OK ' : 'FAIL';
       stdout.writeln('[$icono] "${caso.mensaje}"');
-      stdout.writeln('      esperado: ${_nombre(caso.esperado)} '
-          '| obtenido: ${_nombre(respuesta.tipoRespuesta)}');
+      stdout.writeln(
+        '      esperado: ${_nombre(caso.esperado)} '
+        '| obtenido: ${_nombre(respuesta.tipoRespuesta)}',
+      );
       if (respuesta.tipoRespuesta == TipoRespuesta.transaccion &&
           respuesta.datosTransaccion != null) {
         final d = respuesta.datosTransaccion!;
-        stdout.writeln('      datos: Q${d.monto} ${d.tipo} | '
-            '${d.categoriaNivel1Sugerida} › ${d.categoriaNivel2Sugerida} '
-            '| confianza ${(d.confianza * 100).toStringAsFixed(0)}%');
+        stdout.writeln(
+          '      datos: Q${d.monto} ${d.tipo} | '
+          '${d.categoriaNivel1Sugerida} › ${d.categoriaNivel2Sugerida} '
+          '| confianza ${(d.confianza * 100).toStringAsFixed(0)}%',
+        );
       }
       if (caso.comentario != null) {
         stdout.writeln('      nota: ${caso.comentario}');
@@ -96,8 +106,10 @@ Future<void> main() async {
   final total = aciertos + fallos;
   final porcentaje = total == 0 ? 0.0 : (aciertos / total) * 100;
   stdout.writeln('\n======================================');
-  stdout.writeln('RESULTADO: $aciertos/$total correctos '
-      '(${porcentaje.toStringAsFixed(1)}%)');
+  stdout.writeln(
+    'RESULTADO: $aciertos/$total correctos '
+    '(${porcentaje.toStringAsFixed(1)}%)',
+  );
   stdout.writeln('======================================');
   exit(aciertos == total ? 0 : 1);
 }

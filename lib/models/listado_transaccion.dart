@@ -22,9 +22,14 @@ class ListadoTransaccion {
   final double? precioUnitario;
 
   String get categoria {
-    if (categoriaNivel2 != null && categoriaNivel2!.isNotEmpty) {
-      return '$categoriaNivel1 › $categoriaNivel2';
+    final nivel2 = categoriaNivel2?.trim();
+    if (nivel2 != null && nivel2.isNotEmpty) {
+      return nivel2;
     }
-    return categoriaNivel1 ?? 'Sin categoría';
+
+    final nivel1 = categoriaNivel1?.trim();
+    if (nivel1 != null && nivel1.isNotEmpty) return nivel1;
+
+    return 'Sin categoría';
   }
 }

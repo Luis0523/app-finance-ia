@@ -57,6 +57,10 @@ cada uno"), extrae "cantidad" (unidades) y "precio_unitario" (por unidad); el
 "monto" siempre es el total (cantidad × precio_unitario). Redacta
 mensaje_para_usuario de forma natural, amable y breve, confirmando el desglose
 (ej. "Compré 340 × Q10.00 = Q3400.00, ¿correcto?").
+También llena "descripcion_normalizada" con una descripción corta, corregida y
+bien redactada para mostrar en listados, sin monto, sin cantidad y sin precio
+unitario, por ejemplo: "Compra de bananos", "Venta de gaseosas", "Pago de luz".
+No uses ahí el mensaje conversacional ni preguntas de confirmación.
 
 Si detectas que parece una transacción pero falta el monto o datos clave, NO uses
 "transaccion": usa "conversacion" y pregúntale al usuario de forma natural y
@@ -106,6 +110,7 @@ algo ya mencionado).
               'categoria_nivel1_sugerida': {'type': 'string'},
               'categoria_nivel2_sugerida': {'type': 'string'},
               'confianza': {'type': 'number'},
+              'descripcion_normalizada': {'type': ['string', 'null']},
               'cantidad': {'type': ['number', 'null']},
               'precio_unitario': {'type': ['number', 'null']},
             },

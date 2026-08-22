@@ -21,12 +21,18 @@ void main() {
     final response = LlmResponse.fromJson(json);
 
     expect(response.tipoRespuesta, TipoRespuesta.transaccion);
-    expect(response.mensajeParaUsuario, 'Detecté una venta de Q200. ¿Confirmas?');
+    expect(
+      response.mensajeParaUsuario,
+      'Detecté una venta de Q200. ¿Confirmas?',
+    );
     expect(response.datosTransaccion, isNotNull);
     expect(response.datosTransaccion!.monto, 200);
     expect(response.datosTransaccion!.tipo, 'ingreso');
     expect(response.datosTransaccion!.categoriaNivel1Sugerida, 'Ingresos');
-    expect(response.datosTransaccion!.categoriaNivel2Sugerida, 'Venta de producto');
+    expect(
+      response.datosTransaccion!.categoriaNivel2Sugerida,
+      'Venta de producto',
+    );
     expect(response.datosTransaccion!.confianza, 0.92);
   });
 
@@ -153,6 +159,7 @@ void main() {
         "categoria_nivel1_sugerida": "Costos de venta",
         "categoria_nivel2_sugerida": "Materia prima / Insumos",
         "confianza": 0.9,
+        "descripcion_normalizada": "Compra de bananos",
         "cantidad": 340,
         "precio_unitario": 10
       }
@@ -164,6 +171,10 @@ void main() {
     expect(response.datosTransaccion!.cantidad, 340);
     expect(response.datosTransaccion!.precioUnitario, 10);
     expect(response.datosTransaccion!.monto, 3400);
+    expect(
+      response.datosTransaccion!.descripcionNormalizada,
+      'Compra de bananos',
+    );
     expect(response.datosTransaccion!.tieneDesglose, isTrue);
   });
 }

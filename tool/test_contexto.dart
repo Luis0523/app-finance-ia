@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:finanzas_ia/models/chat_message.dart';
 import 'package:finanzas_ia/models/llm_response.dart';
-import 'package:finanzas_ia/services/llm_service.dart';
+import 'package:finanzas_ia/services/llm_config.dart';
 
 Future<void> main() async {
   final env = <String, String>{};
@@ -15,11 +15,7 @@ Future<void> main() async {
     env[trimmed.substring(0, idx).trim()] = trimmed.substring(idx + 1).trim();
   }
 
-  final service = LlmService(
-    apiKey: env['LLM_API_KEY'] ?? '',
-    baseUrl: env['LLM_BASE_URL'] ?? 'https://api.deepseek.com',
-    model: env['LLM_MODEL'] ?? 'deepseek-chat',
-  );
+  final service = llmServiceFromEnv(env);
 
   stdout.writeln('--- Mensaje 1 ---');
   final r1 = await service.classify(text: 'vendí Q200 de fruta hoy');
@@ -49,8 +45,10 @@ Future<void> main() async {
   if (r2.tipoRespuesta == TipoRespuesta.transaccion &&
       r2.datosTransaccion != null) {
     final d = r2.datosTransaccion!;
-    stdout.writeln('datos: Q${d.monto} ${d.tipo} '
-        '| ${d.categoriaNivel1Sugerida} › ${d.categoriaNivel2Sugerida}');
+    stdout.writeln(
+      'datos: Q${d.monto} ${d.tipo} '
+      '| ${d.categoriaNivel1Sugerida} › ${d.categoriaNivel2Sugerida}',
+    );
   }
 
   exit(0);

@@ -46,6 +46,8 @@ Ingresos, Costos de venta, Gastos operativos, Gastos administrativos, Otros gast
 | **Fase 4** | Totales del mes (RPC `obtener_totales_mes`) | ✅ |
 | **Fase 5** | Consultas específicas (última transacción) y análisis con IA sobre agregados por categoría | ✅ |
 | **Fase 6** | Listado/tabla de ingresos y egresos, flujo de caja, inventario y análisis de viabilidad de compra | ✅ |
+| **Fase 6b** | Desglose cantidad × precio unitario, descripción normalizada, selector DeepSeek/OpenAI y listados refinados | ✅ |
+| **Fase 7** | Inventario con productos, entradas/salidas y stock conversacional | Siguiente |
 
 ### Criterios de aceptación por fase
 
@@ -64,7 +66,7 @@ Ingresos, Costos de venta, Gastos operativos, Gastos administrativos, Otros gast
 
 - Flutter SDK (3.x)
 - Proyecto en Supabase con el esquema aplicado (ver `supabase/schema.sql`)
-- API key de un LLM (Claude o GPT)
+- API key de un LLM compatible (DeepSeek u OpenAI)
 
 ### Configuración
 
@@ -80,6 +82,14 @@ Ingresos, Costos de venta, Gastos operativos, Gastos administrativos, Otros gast
    SUPABASE_URL=https://tu-proyecto.supabase.co
    SUPABASE_ANON_KEY=tu_anon_key
    LLM_API_KEY=tu_llm_api_key
+   ```
+
+   Por defecto se usa DeepSeek (`deepseek-chat`). Para cambiar a OpenAI:
+
+   ```env
+   LLM_PROVIDER=openai
+   OPENAI_API_KEY=tu_openai_api_key
+   OPENAI_MODEL=gpt-4o-mini
    ```
 
 3. Ejecutar el script `supabase/schema.sql` en el SQL Editor de Supabase.
@@ -115,6 +125,7 @@ tool/
 └── verify_connection.dart           # Script de verificación de conexión a Supabase
 docs/
 ├── instruccions.md                  # Especificación de desarrollo
+├── estado-avances.md                # Estado actual, avances y siguiente fase
 └── propuesta.md                     # Propuesta técnica y catálogo de cuentas
 ```
 
