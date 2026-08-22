@@ -141,4 +141,29 @@ void main() {
 
     expect(response.datosTransaccion!.monto, 150.50);
   });
+
+  test('parsea cantidad y precio unitario en la transacción', () {
+    const json = '''
+    {
+      "tipo_respuesta": "transaccion",
+      "mensaje_para_usuario": "",
+      "datos_transaccion": {
+        "monto": 3400,
+        "tipo": "egreso",
+        "categoria_nivel1_sugerida": "Costos de venta",
+        "categoria_nivel2_sugerida": "Materia prima / Insumos",
+        "confianza": 0.9,
+        "cantidad": 340,
+        "precio_unitario": 10
+      }
+    }
+    ''';
+
+    final response = LlmResponse.fromJson(json);
+
+    expect(response.datosTransaccion!.cantidad, 340);
+    expect(response.datosTransaccion!.precioUnitario, 10);
+    expect(response.datosTransaccion!.monto, 3400);
+    expect(response.datosTransaccion!.tieneDesglose, isTrue);
+  });
 }

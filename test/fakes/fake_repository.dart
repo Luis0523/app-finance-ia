@@ -113,6 +113,8 @@ class FakeRepository implements FinanzasRepository {
     required String descripcionNormalizada,
     required String origen,
     required double confianza,
+    double? cantidad,
+    double? precioUnitario,
   }) async {
     if (errorEnInsertar != null) throw errorEnInsertar!;
     if (failOnPersist) throw PersistException('error simulado de persistencia');

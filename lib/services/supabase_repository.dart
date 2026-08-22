@@ -31,6 +31,8 @@ abstract class FinanzasRepository {
     required String descripcionNormalizada,
     required String origen,
     required double confianza,
+    double? cantidad,
+    double? precioUnitario,
   });
 
   Future<String> insertarConversacion({
@@ -163,6 +165,8 @@ class SupabaseRepository implements FinanzasRepository {
     required String descripcionNormalizada,
     required String origen,
     required double confianza,
+    double? cantidad,
+    double? precioUnitario,
   }) async {
     await _asegurarDatosPrueba();
     final negocioId = _negocioId!;
@@ -179,6 +183,8 @@ class SupabaseRepository implements FinanzasRepository {
           'origen': origen,
           'confianza_clasificacion': confianza,
           'confirmado_por_usuario': true,
+          'cantidad': ?cantidad,
+          'precio_unitario': ?precioUnitario,
         })
         .select('id');
 
@@ -352,6 +358,8 @@ class SupabaseRepository implements FinanzasRepository {
         categoriaNivel2: row['categoria_nivel2']?.toString(),
         descripcion: row['descripcion']?.toString(),
         origen: row['origen']?.toString(),
+        cantidad: (row['cantidad'] as num?)?.toDouble(),
+        precioUnitario: (row['precio_unitario'] as num?)?.toDouble(),
       );
     }).toList();
   }

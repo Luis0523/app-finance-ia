@@ -15,6 +15,7 @@ create table if not exists productos (
 );
 
 alter table productos enable row level security;
+drop policy if exists "productos de su negocio" on productos;
 create policy "productos de su negocio"
   on productos for all to anon, authenticated
   using (negocio_id = session_negocio_id())
@@ -23,11 +24,14 @@ grant all on productos to anon, authenticated;
 
 -- Seed de inventario de prueba
 insert into productos (negocio_id, nombre, precio_compra, precio_venta, existencias)
-select id, 'Fruta (caja)', 80, 120, 10 from negocios where nombre = 'Tienda de Doña María';
+select id, 'Fruta (caja)', 80, 120, 10 from negocios where nombre = 'Tienda de Doña María'
+on conflict (negocio_id, nombre) do nothing;
 insert into productos (negocio_id, nombre, precio_compra, precio_venta, existencias)
-select id, 'Gaseosa (docena)', 90, 135, 8 from negocios where nombre = 'Tienda de Doña María';
+select id, 'Gaseosa (docena)', 90, 135, 8 from negocios where nombre = 'Tienda de Doña María'
+on conflict (negocio_id, nombre) do nothing;
 insert into productos (negocio_id, nombre, precio_compra, precio_venta, existencias)
-select id, 'Bufanda', 60, 100, 5 from negocios where nombre = 'Tienda de Doña María';
+select id, 'Bufanda', 60, 100, 5 from negocios where nombre = 'Tienda de Doña María'
+on conflict (negocio_id, nombre) do nothing;
 
 -- Listado de transacciones confirmadas (opcional: filtrar por tipo)
 create or replace function obtener_listado_transacciones(
@@ -49,7 +53,7 @@ stable
 as $$
   select t.fecha, t.tipo::text, t.monto,
          c1.nombre, c2.nombre,
-         coalesce(t.descripcion_normalizada, t.descripcion_original),
+         coalesce(t.descripcion_original, t.descripcion_normalizada),
          t.origen::text
   from transacciones t
   left join categorias c2 on c2.id = t.categoria_id

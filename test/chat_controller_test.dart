@@ -66,6 +66,36 @@ LlmResponse _transaccionDe300() {
   );
 }
 
+LlmResponse _transaccionConDesglose() {
+  return LlmResponse(
+    tipoRespuesta: TipoRespuesta.transaccion,
+    mensajeParaUsuario: 'Compré 340 × Q10.00 = Q3400.00, ¿correcto?',
+    datosTransaccion: const DatosTransaccion(
+      monto: 0,
+      tipo: 'egreso',
+      categoriaNivel1Sugerida: 'Costos de venta',
+      categoriaNivel2Sugerida: 'Materia prima / Insumos',
+      confianza: 0.9,
+      cantidad: 340,
+      precioUnitario: 10,
+    ),
+  );
+}
+
+LlmResponse _transaccionSinMonto() {
+  return LlmResponse(
+    tipoRespuesta: TipoRespuesta.transaccion,
+    mensajeParaUsuario: 'Registré la compra.',
+    datosTransaccion: const DatosTransaccion(
+      monto: 0,
+      tipo: 'egreso',
+      categoriaNivel1Sugerida: 'Costos de venta',
+      categoriaNivel2Sugerida: 'Materia prima',
+      confianza: 0.5,
+    ),
+  );
+}
+
 LlmResponse _conversacion() {
   return const LlmResponse(
     tipoRespuesta: TipoRespuesta.conversacion,
@@ -387,8 +417,12 @@ void main() {
     final message = controller.state.messages.last;
     expect(message.tabla, isNotNull);
     expect(message.tabla!.titulo, 'Mis egresos');
-    expect(message.tabla!.headers, ['Fecha', 'Categoría', 'Monto']);
+    expect(
+      message.tabla!.headers,
+      ['Fecha', 'Categoría', 'Descripción', 'Cant.', 'C. unit.', 'Total'],
+    );
     expect(message.tabla!.rows.length, 1);
+    expect(message.tabla!.rows.first.length, 6);
     expect(repo.ultimoTipoListado, 'egreso');
   });
 
@@ -450,6 +484,38 @@ void main() {
     await controller.sendMessage('¿es viable comprar?');
 
     expect(controller.state.messages.last.text, contains('¿De cuánto'));
+  });
+
+  test('calcula el monto total a partir de cantidad × precio unitario', () async {
+    final controller = ChatController(_FakeLlmService([_transaccionConDesglose()]), FakeRepository());
+
+    await controller.sendMessage('compré 340 cosas a 10 quetzales cada una');
+
+    final datos = controller.state.pendingTransaction!.datos;
+    expect(datos.monto, 3400);
+    expect(datos.cantidad, 340);
+    expect(datos.precioUnitario, 10);
+  });
+
+  test('transacción sin monto pide el monto de forma conversacional', () async {
+    final controller = ChatController(_FakeLlmService([_transaccionSinMonto()]), FakeRepository());
+
+    await controller.sendMessage('compré algo pero no sé cuánto');
+
+    expect(controller.state.pendingTransaction, isNull);
+    expect(controller.state.messages.last.text, contains('¿De cuánto'));
+  });
+
+  test('feedback de confirmación incluye el desglose', () async {
+    final repo = FakeRepository();
+    final controller = ChatController(_FakeLlmService([_transaccionConDesglose()]), repo);
+
+    await controller.sendMessage('compré 340 cosas a 10 quetzales cada una');
+    await controller.acceptPendingTransaction();
+
+    final feedback = controller.state.messages.last;
+    expect(feedback.text, contains('340 × Q10.00'));
+    expect(feedback.text, contains('Q3400.00'));
   });
 }
 

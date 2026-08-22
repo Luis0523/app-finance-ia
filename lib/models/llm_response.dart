@@ -25,6 +25,8 @@ class DatosTransaccion {
     required this.categoriaNivel1Sugerida,
     required this.categoriaNivel2Sugerida,
     required this.confianza,
+    this.cantidad,
+    this.precioUnitario,
   });
 
   final double monto;
@@ -32,6 +34,14 @@ class DatosTransaccion {
   final String categoriaNivel1Sugerida;
   final String categoriaNivel2Sugerida;
   final double confianza;
+
+  /// Número de unidades (opcional).
+  final double? cantidad;
+
+  /// Costo/precio por unidad en quetzales (opcional).
+  final double? precioUnitario;
+
+  bool get tieneDesglose => cantidad != null && precioUnitario != null;
 
   factory DatosTransaccion.fromMap(Map<String, dynamic> map) {
     return DatosTransaccion(
@@ -41,6 +51,30 @@ class DatosTransaccion {
       categoriaNivel2Sugerida:
           map['categoria_nivel2_sugerida']?.toString() ?? '',
       confianza: _asDouble(map['confianza']),
+      cantidad: _asDoubleOrNull(map['cantidad']),
+      precioUnitario: _asDoubleOrNull(map['precio_unitario']),
+    );
+  }
+
+  DatosTransaccion copyWith({
+    double? monto,
+    String? tipo,
+    String? categoriaNivel1Sugerida,
+    String? categoriaNivel2Sugerida,
+    double? confianza,
+    double? cantidad,
+    double? precioUnitario,
+  }) {
+    return DatosTransaccion(
+      monto: monto ?? this.monto,
+      tipo: tipo ?? this.tipo,
+      categoriaNivel1Sugerida:
+          categoriaNivel1Sugerida ?? this.categoriaNivel1Sugerida,
+      categoriaNivel2Sugerida:
+          categoriaNivel2Sugerida ?? this.categoriaNivel2Sugerida,
+      confianza: confianza ?? this.confianza,
+      cantidad: cantidad ?? this.cantidad,
+      precioUnitario: precioUnitario ?? this.precioUnitario,
     );
   }
 
@@ -48,6 +82,12 @@ class DatosTransaccion {
     if (value is num) return value.toDouble();
     final parsed = double.tryParse(value?.toString() ?? '');
     return parsed ?? 0;
+  }
+
+  static double? _asDoubleOrNull(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
   }
 }
 

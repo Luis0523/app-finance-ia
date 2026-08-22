@@ -541,7 +541,22 @@ class _TransactionCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            _DataRow(label: 'Monto', value: 'Q${d.monto.toStringAsFixed(2)}'),
+            if (d.tieneDesglose) ...[
+              _DataRow(
+                label: 'Cantidad',
+                value: '${d.cantidad!.toStringAsFixed(0)} unidades',
+              ),
+              _DataRow(
+                label: 'Precio unit.',
+                value: 'Q${d.precioUnitario!.toStringAsFixed(2)}',
+              ),
+              const SizedBox(height: 4),
+            ],
+            _DataRow(
+              label: 'Total',
+              value: 'Q${d.monto.toStringAsFixed(2)}',
+              bold: true,
+            ),
             _DataRow(label: 'Tipo', value: isIngreso ? 'Ingreso' : 'Egreso'),
             _DataRow(
               label: 'Categoría',
@@ -593,90 +608,112 @@ class _TablaCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final tabla = message.tabla!;
+    final anchos = _anchosColumnas(tabla);
 
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Card(
-        margin: const EdgeInsets.only(bottom: 8),
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: theme.colorScheme.outlineVariant),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (message.text.isNotEmpty)
-                Text(message.text, style: theme.textTheme.bodyLarge),
-              if (message.text.isNotEmpty) const SizedBox(height: 8),
-              Text(
-                tabla.titulo,
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (message.text.isNotEmpty) ...[
+              Text(message.text, style: theme.textTheme.bodyLarge),
               const SizedBox(height: 8),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: _buildTabla(tabla, theme),
-              ),
             ],
-          ),
+            Text(
+              tabla.titulo,
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _fila(tabla.headers, anchos, esEncabezado: true, theme: theme),
+                  const SizedBox(height: 6),
+                  for (var i = 0; i < tabla.rows.length; i++)
+                    _fila(tabla.rows[i], anchos, tabla: tabla, fila: i, theme: theme),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildTabla(TablaDatos tabla, ThemeData theme) {
-    final borderColor = theme.colorScheme.outlineVariant;
+  /// Ancho dinámico por columna según el contenido (mínimo/máximo).
+  List<double> _anchosColumnas(TablaDatos tabla) {
+    const minAncho = 64.0;
+    const maxAncho = 260.0;
+    final anchos = <double>[];
+    for (var c = 0; c < tabla.headers.length; c++) {
+      var maxLargo = tabla.headers[c].length;
+      for (final fila in tabla.rows) {
+        if (c < fila.length && fila[c].length > maxLargo) {
+          maxLargo = fila[c].length;
+        }
+      }
+      anchos.add((maxLargo * 7.2).clamp(minAncho, maxAncho).toDouble());
+    }
+    return anchos;
+  }
 
-    return Table(
-      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-      border: TableBorder.all(color: borderColor),
+  Widget _fila(
+    List<String> celdas,
+    List<double> anchos, {
+    required ThemeData theme,
+    TablaDatos? tabla,
+    int fila = -1,
+    bool esEncabezado = false,
+  }) {
+    final tipo = (!esEncabezado && tabla != null && fila < tabla.tipos.length)
+        ? tabla.tipos[fila]
+        : '';
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TableRow(
-          decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerHighest),
-          children: [
-            for (final header in tabla.headers)
-              _celda(
-                Text(header,
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.bold)),
-              ),
-          ],
-        ),
-        for (var i = 0; i < tabla.rows.length; i++)
-          TableRow(
-            children: [
-              for (var c = 0; c < tabla.rows[i].length; c++)
-                _celda(
-                  Text(
-                    tabla.rows[i][c],
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: _colorCelda(tabla, i, c, theme),
-                    ),
-                  ),
+        for (var c = 0; c < celdas.length; c++)
+          SizedBox(
+            width: anchos[c],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Text(
+                celdas[c],
+                style: (esEncabezado
+                        ? theme.textTheme.bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.bold)
+                        : theme.textTheme.bodyMedium)
+                    ?.copyWith(
+                  color: (!esEncabezado &&
+                          tabla != null &&
+                          tabla.columnaColor == c &&
+                          tipo == 'ingreso')
+                      ? Colors.green.shade700
+                      : (!esEncabezado &&
+                              tabla != null &&
+                              tabla.columnaColor == c &&
+                              tipo == 'egreso')
+                          ? theme.colorScheme.error
+                          : null,
                 ),
-            ],
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ),
       ],
-    );
-  }
-
-  Color? _colorCelda(TablaDatos tabla, int fila, int col, ThemeData theme) {
-    if (tabla.columnaColor != col) return null;
-    final tipo = fila < tabla.tipos.length ? tabla.tipos[fila] : '';
-    if (tipo == 'ingreso') return Colors.green.shade700;
-    if (tipo == 'egreso') return theme.colorScheme.error;
-    return null;
-  }
-
-  Widget _celda(Widget child) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      child: child,
     );
   }
 }
@@ -784,10 +821,15 @@ class _TotalRow extends StatelessWidget {
 }
 
 class _DataRow extends StatelessWidget {
-  const _DataRow({required this.label, required this.value});
+  const _DataRow({
+    required this.label,
+    required this.value,
+    this.bold = false,
+  });
 
   final String label;
   final String value;
+  final bool bold;
 
   @override
   Widget build(BuildContext context) {
@@ -805,7 +847,14 @@ class _DataRow extends StatelessWidget {
               ),
             ),
           ),
-          Expanded(child: Text(value, style: theme.textTheme.bodyLarge)),
+          Expanded(
+            child: Text(
+              value,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                fontWeight: bold ? FontWeight.bold : null,
+              ),
+            ),
+          ),
         ],
       ),
     );

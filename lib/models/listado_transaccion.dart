@@ -7,6 +7,8 @@ class ListadoTransaccion {
     this.categoriaNivel2,
     this.descripcion,
     this.origen,
+    this.cantidad,
+    this.precioUnitario,
   });
 
   final DateTime fecha;
@@ -16,6 +18,8 @@ class ListadoTransaccion {
   final String? categoriaNivel2;
   final String? descripcion;
   final String? origen;
+  final double? cantidad;
+  final double? precioUnitario;
 
   String get categoria {
     if (categoriaNivel2 != null && categoriaNivel2!.isNotEmpty) {

@@ -151,13 +151,29 @@ class ChatController extends StateNotifier<ChatState> {
 
       if (response.tipoRespuesta == TipoRespuesta.transaccion &&
           response.datosTransaccion != null) {
+        var datos = response.datosTransaccion!;
+
+        // Si falta el monto pero hay desglose, lo calculamos.
+        if (datos.monto <= 0 && datos.tieneDesglose) {
+          datos = datos.copyWith(monto: datos.cantidad! * datos.precioUnitario!);
+        }
+
+        // Sin monto: pedirlo de forma conversacional antes de registrar.
+        if (datos.monto <= 0) {
+          _addAssistantMessage(
+            'Parece una transacción, pero no me diste el monto. '
+            '¿De cuánto fue?',
+          );
+          return;
+        }
+
         state = state.copyWith(
           isSending: false,
           isSaving: false,
           pendingTransaction: PendingTransaction(
             messageId: _uuid.v4(),
             mensajeParaUsuario: response.mensajeParaUsuario,
-            datos: response.datosTransaccion!,
+            datos: datos,
             origen: origen,
             descripcionOriginal: trimmed,
             conversacionId: conversacionId,
@@ -326,13 +342,27 @@ class ChatController extends StateNotifier<ChatState> {
               : 'Mis movimientos';
       final tabla = TablaDatos(
         titulo: titulo,
-        headers: const ['Fecha', 'Categoría', 'Monto'],
-        columnaColor: 2,
+        headers: const [
+          'Fecha',
+          'Categoría',
+          'Descripción',
+          'Cant.',
+          'C. unit.',
+          'Total',
+        ],
+        columnaColor: 5,
         tipos: lista.map((t) => t.tipo).toList(),
         rows: lista
             .map((t) => [
                   DateFormat('dd/MM').format(t.fecha),
                   t.categoria,
+                  (t.descripcion?.isNotEmpty ?? false)
+                      ? t.descripcion!
+                      : '—',
+                  t.cantidad != null ? t.cantidad!.toStringAsFixed(0) : '—',
+                  t.precioUnitario != null
+                      ? 'Q${t.precioUnitario!.toStringAsFixed(2)}'
+                      : '—',
                   'Q${t.monto.toStringAsFixed(2)}',
                 ])
             .toList(),
@@ -533,8 +563,12 @@ class ChatController extends StateNotifier<ChatState> {
       final categoria = d.categoriaNivel2Sugerida.isNotEmpty
           ? '${d.categoriaNivel1Sugerida} › ${d.categoriaNivel2Sugerida}'
           : d.categoriaNivel1Sugerida;
+      final desglose = d.tieneDesglose
+          ? ' (${d.cantidad!.toStringAsFixed(0)} × '
+              'Q${d.precioUnitario!.toStringAsFixed(2)})'
+          : '';
       _addAssistantMessage(
-        '✓ Registrado: $tipo de $monto en $categoria.',
+        '✓ Registrado: $tipo de $monto$desglose en $categoria.',
         tipoMovimiento: d.tipo,
       );
     } catch (e) {
@@ -558,6 +592,8 @@ class ChatController extends StateNotifier<ChatState> {
       descripcionNormalizada: pending.mensajeParaUsuario,
       origen: pending.origen,
       confianza: pending.datos.confianza,
+      cantidad: pending.datos.cantidad,
+      precioUnitario: pending.datos.precioUnitario,
     );
 
     final conversacionId = pending.conversacionId;

@@ -52,6 +52,16 @@ financiamiento, Retiros personales.
 
 Si el mensaje describe una transacción de dinero (venta, compra, pago, gasto,
 préstamo, retiro), usa tipo_respuesta = "transaccion" y llena datos_transaccion.
+Cuando el mensaje mencione unidades y precio (ej. "compré 340 cosas a 10 quetzales
+cada uno"), extrae "cantidad" (unidades) y "precio_unitario" (por unidad); el
+"monto" siempre es el total (cantidad × precio_unitario). Redacta
+mensaje_para_usuario de forma natural, amable y breve, confirmando el desglose
+(ej. "Compré 340 × Q10.00 = Q3400.00, ¿correcto?").
+
+Si detectas que parece una transacción pero falta el monto o datos clave, NO uses
+"transaccion": usa "conversacion" y pregúntale al usuario de forma natural y
+amable por lo que falta (ej. "¿De cuánto fue la venta?", "¿Cuántas unidades y a
+qué precio?") para confirmar el procedimiento antes de registrar.
 Si es un saludo, pregunta general o algo ambiguo sin datos financieros claros,
 usa tipo_respuesta = "conversacion".
 Si el usuario pide un reporte o resumen (totales, cuánto gastó/ganó), usa
@@ -96,6 +106,8 @@ algo ya mencionado).
               'categoria_nivel1_sugerida': {'type': 'string'},
               'categoria_nivel2_sugerida': {'type': 'string'},
               'confianza': {'type': 'number'},
+              'cantidad': {'type': ['number', 'null']},
+              'precio_unitario': {'type': ['number', 'null']},
             },
           },
           'datos_consulta': {
