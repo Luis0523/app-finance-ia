@@ -56,11 +56,130 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  void _onSend() {
+  Future<void> _onSend() async {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
-    ref.read(chatControllerProvider.notifier).addUserMessage(text);
+    final controller = ref.read(chatControllerProvider.notifier);
+    controller.sendMessage(text);
     _scrollToBottom();
+  }
+
+  Future<void> _onConfirmPending() async {
+    ref.read(chatControllerProvider.notifier).acceptPendingTransaction();
+    _scrollToBottom();
+  }
+
+  Future<void> _onCorrectPending() async {
+    final pending = ref.read(chatControllerProvider).pendingTransaction;
+    if (pending == null) return;
+    await _showCorrectionDialog(pending);
+  }
+
+  Future<void> _showCorrectionDialog(PendingTransaction pending) async {
+    final montoController = TextEditingController(
+      text: pending.datos.monto.toStringAsFixed(2),
+    );
+    final nivel2Controller = TextEditingController(
+      text: pending.datos.categoriaNivel2Sugerida,
+    );
+    var tipo = pending.datos.tipo;
+    var categoriaNivel1 = pending.datos.categoriaNivel1Sugerida;
+
+    final guardado = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Corregir transacción'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: montoController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Monto (Q)',
+                    prefixText: 'Q ',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: tipo,
+                  decoration: const InputDecoration(labelText: 'Tipo'),
+                  items: const [
+                    DropdownMenuItem(value: 'ingreso', child: Text('Ingreso')),
+                    DropdownMenuItem(value: 'egreso', child: Text('Egreso')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setDialogState(() => tipo = value);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: nivel2Controller,
+                  decoration: const InputDecoration(
+                    labelText: 'Categoría (nivel 2)',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: categoriaNivel1,
+                  decoration: const InputDecoration(labelText: 'Categoría nivel 1'),
+                  items: _nivel1Categorias(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setDialogState(() => categoriaNivel1 = value);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (guardado != true) return;
+
+    final monto = double.tryParse(montoController.text.trim()) ?? 0;
+    ref
+        .read(chatControllerProvider.notifier)
+        .updatePendingTransaction(
+          monto: monto,
+          tipo: tipo,
+          categoriaNivel1: categoriaNivel1,
+          categoriaNivel2: nivel2Controller.text.trim(),
+        );
+  }
+
+  List<DropdownMenuItem<String>> _nivel1Categorias() {
+    const categorias = [
+      'Ingresos',
+      'Costos de venta',
+      'Gastos operativos',
+      'Gastos administrativos',
+      'Otros gastos',
+      'Inversiones',
+      'Préstamos y financiamiento',
+      'Retiros personales',
+    ];
+    return categorias
+        .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+        .toList();
   }
 
   void _scrollToBottom() {
@@ -113,10 +232,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     controller: _scrollController,
                     padding: const EdgeInsets.all(16),
                     itemCount: chat.messages.length,
-                    itemBuilder: (context, index) =>
-                        _MessageBubble(message: chat.messages[index]),
+                    itemBuilder: (context, index) {
+                      final message = chat.messages[index];
+                      if (message.isUser) {
+                        return _MessageBubble(message: message);
+                      }
+                      return _MessageBubble(message: message);
+                    },
                   ),
           ),
+          if (chat.isSending) const _TypingIndicator(),
+          if (chat.pendingTransaction != null)
+            _TransactionCard(
+              pending: chat.pendingTransaction!,
+              onConfirm: _onConfirmPending,
+              onCorrect: _onCorrectPending,
+            ),
           _InputBar(
             textController: _textController,
             canSend: chat.canSend,
@@ -199,6 +330,27 @@ class _MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isUser = message.isUser;
+    final tipo = message.tipoMovimiento;
+    final borderColor = tipo == 'ingreso'
+        ? Colors.green
+        : tipo == 'egreso'
+            ? theme.colorScheme.error
+            : null;
+
+    final contenido = borderColor != null
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                tipo == 'ingreso' ? Icons.trending_up : Icons.trending_down,
+                size: 18,
+                color: borderColor,
+              ),
+              const SizedBox(width: 8),
+              Flexible(child: Text(message.text)),
+            ],
+          )
+        : Text(message.text);
 
     final bubble = Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -211,11 +363,11 @@ class _MessageBubble extends StatelessWidget {
             ? theme.colorScheme.primaryContainer
             : theme.colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
+        border: borderColor != null
+            ? Border.all(color: borderColor, width: 1.5)
+            : null,
       ),
-      child: Text(
-        message.text,
-        style: theme.textTheme.bodyLarge,
-      ),
+      child: contenido,
     );
 
     return Align(
@@ -294,6 +446,155 @@ class _InputBar extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _TypingIndicator extends StatelessWidget {
+  const _TypingIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 8),
+                Text('Clasificando...', style: theme.textTheme.bodyMedium),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TransactionCard extends StatelessWidget {
+  const _TransactionCard({
+    required this.pending,
+    required this.onConfirm,
+    required this.onCorrect,
+  });
+
+  final PendingTransaction pending;
+  final VoidCallback onConfirm;
+  final VoidCallback onCorrect;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final d = pending.datos;
+    final isIngreso = d.tipo == 'ingreso';
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: isIngreso ? Colors.green.shade200 : theme.colorScheme.error,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  isIngreso ? Icons.trending_up : Icons.trending_down,
+                  color: isIngreso ? Colors.green : theme.colorScheme.error,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    pending.mensajeParaUsuario,
+                    style: theme.textTheme.bodyLarge,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _DataRow(label: 'Monto', value: 'Q${d.monto.toStringAsFixed(2)}'),
+            _DataRow(label: 'Tipo', value: isIngreso ? 'Ingreso' : 'Egreso'),
+            _DataRow(
+              label: 'Categoría',
+              value: d.categoriaNivel2Sugerida.isNotEmpty
+                  ? '${d.categoriaNivel1Sugerida} › ${d.categoriaNivel2Sugerida}'
+                  : d.categoriaNivel1Sugerida,
+            ),
+            _DataRow(
+              label: 'Confianza',
+              value: '${(d.confianza * 100).toStringAsFixed(0)}%',
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: onCorrect,
+                  icon: const Icon(Icons.edit),
+                  label: const Text('Corregir'),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: onConfirm,
+                    icon: const Icon(Icons.check),
+                    label: const Text('Confirmar'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DataRow extends StatelessWidget {
+  const _DataRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(
+              label,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Expanded(child: Text(value, style: theme.textTheme.bodyLarge)),
+        ],
       ),
     );
   }

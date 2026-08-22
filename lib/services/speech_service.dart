@@ -7,8 +7,11 @@ class SpeechService {
 
   bool get isInitialized => _initialized;
 
-  Future<bool> initialize() async {
-    _initialized = await _speech.initialize(debugLogging: false);
+  Future<bool> initialize({SpeechStatusListener? onStatus}) async {
+    _initialized = await _speech.initialize(
+      debugLogging: false,
+      onStatus: onStatus,
+    );
     return _initialized;
   }
 
@@ -27,6 +30,9 @@ class SpeechService {
     return 'es_ES';
   }
 
+  /// Duración de silencio que detiene la escucha automáticamente.
+  static const pauseFor = Duration(seconds: 2);
+
   Future<void> startListening({
     required String localeId,
     required void Function(SpeechRecognitionResult result) onResult,
@@ -40,6 +46,7 @@ class SpeechService {
         listenMode: ListenMode.dictation,
         partialResults: true,
         cancelOnError: true,
+        pauseFor: pauseFor,
       ),
     );
   }
