@@ -1,5 +1,7 @@
 import 'package:supabase/supabase.dart';
 
+import '../models/totales_mes.dart';
+
 class PersistException implements Exception {
   PersistException(this.message);
 
@@ -36,6 +38,8 @@ abstract class FinanzasRepository {
     required String conversacionId,
     required String transaccionId,
   });
+
+  Future<TotalesMes> obtenerTotalesMes();
 }
 
 class SupabaseRepository implements FinanzasRepository {
@@ -191,5 +195,33 @@ class SupabaseRepository implements FinanzasRepository {
         .from('conversaciones')
         .update({'transaccion_id': transaccionId})
         .eq('id', conversacionId);
+  }
+
+  @override
+  Future<TotalesMes> obtenerTotalesMes() async {
+    await _asegurarDatosPrueba();
+    final negocioId = _negocioId!;
+
+    final rows = await _client.rpc(
+      'obtener_totales_mes',
+      params: {'p_negocio_id': negocioId},
+    );
+
+    if (rows.isEmpty) {
+      return const TotalesMes(
+        ingresos: 0,
+        egresos: 0,
+        cantidadIngresos: 0,
+        cantidadEgresos: 0,
+      );
+    }
+
+    final row = rows.first as Map<String, dynamic>;
+    return TotalesMes(
+      ingresos: (row['ingresos'] as num?)?.toDouble() ?? 0,
+      egresos: (row['egresos'] as num?)?.toDouble() ?? 0,
+      cantidadIngresos: (row['cantidad_ingresos'] as num?)?.toInt() ?? 0,
+      cantidadEgresos: (row['cantidad_egresos'] as num?)?.toInt() ?? 0,
+    );
   }
 }

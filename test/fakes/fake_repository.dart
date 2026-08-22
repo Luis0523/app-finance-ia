@@ -1,15 +1,24 @@
+import 'package:finanzas_ia/models/totales_mes.dart';
 import 'package:finanzas_ia/services/supabase_repository.dart';
 
 class FakeRepository implements FinanzasRepository {
 
   bool failOnPersist = false;
+  Object? errorEnInsertar;
   int categoriaBusquedas = 0;
   int transacciones = 0;
   int conversaciones = 0;
   int conversacionesActualizadas = 0;
+  int totalesConsultas = 0;
   String? lastCategoriaId;
   String? lastTransaccionId;
   String? lastConversacionId;
+  TotalesMes totalesMes = const TotalesMes(
+    ingresos: 500,
+    egresos: 300,
+    cantidadIngresos: 2,
+    cantidadEgresos: 1,
+  );
 
   @override
   Future<String> buscarOCrearCategoriaNivel2({
@@ -32,6 +41,7 @@ class FakeRepository implements FinanzasRepository {
     required String origen,
     required double confianza,
   }) async {
+    if (errorEnInsertar != null) throw errorEnInsertar!;
     if (failOnPersist) throw PersistException('error simulado de persistencia');
     transacciones++;
     lastTransaccionId = 'transaccion-$transacciones';
@@ -55,5 +65,11 @@ class FakeRepository implements FinanzasRepository {
     required String transaccionId,
   }) async {
     conversacionesActualizadas++;
+  }
+
+  @override
+  Future<TotalesMes> obtenerTotalesMes() async {
+    totalesConsultas++;
+    return totalesMes;
   }
 }

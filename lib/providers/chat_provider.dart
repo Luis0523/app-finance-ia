@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import '../models/chat_message.dart';
 import '../models/llm_response.dart';
+import '../models/totales_mes.dart';
 import '../services/llm_service.dart';
 import '../services/supabase_repository.dart';
 import 'supabase_provider.dart';
@@ -122,10 +123,14 @@ class ChatController extends StateNotifier<ChatState> {
 
     final origen = state.inputOrigen;
     addUserMessage(trimmed);
+    final historial = _contextoPrevio();
     state = state.copyWith(isSending: true);
 
     try {
-      final response = await _llm.classify(text: trimmed);
+      final response = await _llm.classify(
+        text: trimmed,
+        historial: historial,
+      );
 
       final intencion = _intencionDe(response.tipoRespuesta);
       String? conversacionId;
@@ -155,14 +160,44 @@ class ChatController extends StateNotifier<ChatState> {
         return;
       }
 
+      if (response.tipoRespuesta == TipoRespuesta.consultaReporte) {
+        try {
+          final totales = await _repo.obtenerTotalesMes();
+          _addReportMessage(
+            response.mensajeParaUsuario.isEmpty
+                ? 'Estos son tus totales del mes.'
+                : response.mensajeParaUsuario,
+            totales,
+          );
+        } on Exception catch (e) {
+          _addAssistantMessage('No se pudieron calcular los totales: $e');
+        }
+        return;
+      }
+
       _addAssistantMessage(
         response.mensajeParaUsuario.isEmpty
             ? _fallbackMessage(response.tipoRespuesta)
             : response.mensajeParaUsuario,
       );
-    } on Exception catch (e) {
+    } catch (e) {
       _addAssistantMessage('Lo siento, hubo un error: $e');
     }
+  }
+
+  /// Historial de mensajes previos al actual (excluye el mensaje recién
+  /// enviado, que se pasa por separado al LLM). Limita a los últimos 20.
+  List<ChatMessage> _contextoPrevio() {
+    final todos = state.messages;
+    if (todos.isEmpty) return const [];
+
+    final previos = todos
+        .take(todos.length - 1)
+        .where((m) => m.text.trim().isNotEmpty)
+        .toList();
+
+    if (previos.length <= 20) return previos;
+    return previos.sublist(previos.length - 20);
   }
 
   String _intencionDe(TipoRespuesta tipoRespuesta) {
@@ -201,6 +236,20 @@ class ChatController extends StateNotifier<ChatState> {
     );
   }
 
+  void _addReportMessage(String text, TotalesMes totales) {
+    final message = ChatMessage(
+      id: _uuid.v4(),
+      text: text,
+      isUser: false,
+      timestamp: DateTime.now(),
+      reporte: totales,
+    );
+    state = state.copyWith(
+      messages: [...state.messages, message],
+      isSending: false,
+    );
+  }
+
   Future<void> acceptPendingTransaction() async {
     final pending = state.pendingTransaction;
     if (pending == null) return;
@@ -208,29 +257,12 @@ class ChatController extends StateNotifier<ChatState> {
     state = state.copyWith(clearPendingTransaction: true, isSaving: true);
 
     try {
-      final categoriaId = await _repo.buscarOCrearCategoriaNivel2(
-        categoriaNivel1: pending.datos.categoriaNivel1Sugerida,
-        categoriaNivel2: pending.datos.categoriaNivel2Sugerida,
-        tipo: pending.datos.tipo,
+      await _persistir(pending).timeout(
+        const Duration(seconds: 45),
+        onTimeout: () => throw PersistException(
+          'Tiempo de espera agotado al guardar.',
+        ),
       );
-
-      final transaccionId = await _repo.insertarTransaccion(
-        categoriaId: categoriaId,
-        monto: pending.datos.monto,
-        tipo: pending.datos.tipo,
-        descripcionOriginal: pending.descripcionOriginal,
-        descripcionNormalizada: pending.mensajeParaUsuario,
-        origen: pending.origen,
-        confianza: pending.datos.confianza,
-      );
-
-      final conversacionId = pending.conversacionId;
-      if (conversacionId != null) {
-        await _repo.actualizarTransaccionEnConversacion(
-          conversacionId: conversacionId,
-          transaccionId: transaccionId,
-        );
-      }
 
       final d = pending.datos;
       final monto = 'Q${d.monto.toStringAsFixed(2)}';
@@ -242,9 +274,35 @@ class ChatController extends StateNotifier<ChatState> {
         '✓ Registrado: $tipo de $monto en $categoria.',
         tipoMovimiento: d.tipo,
       );
-    } on Exception catch (e) {
+    } catch (e) {
       state = state.copyWith(isSaving: false, pendingTransaction: pending);
       _addAssistantMessage('No se pudo guardar la transacción: $e');
+    }
+  }
+
+  Future<void> _persistir(PendingTransaction pending) async {
+    final categoriaId = await _repo.buscarOCrearCategoriaNivel2(
+      categoriaNivel1: pending.datos.categoriaNivel1Sugerida,
+      categoriaNivel2: pending.datos.categoriaNivel2Sugerida,
+      tipo: pending.datos.tipo,
+    );
+
+    final transaccionId = await _repo.insertarTransaccion(
+      categoriaId: categoriaId,
+      monto: pending.datos.monto,
+      tipo: pending.datos.tipo,
+      descripcionOriginal: pending.descripcionOriginal,
+      descripcionNormalizada: pending.mensajeParaUsuario,
+      origen: pending.origen,
+      confianza: pending.datos.confianza,
+    );
+
+    final conversacionId = pending.conversacionId;
+    if (conversacionId != null) {
+      await _repo.actualizarTransaccionEnConversacion(
+        conversacionId: conversacionId,
+        transaccionId: transaccionId,
+      );
     }
   }
 

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:finanzas_ia/main.dart';
+import 'package:finanzas_ia/models/chat_message.dart';
 import 'package:finanzas_ia/models/llm_response.dart';
 import 'package:finanzas_ia/providers/chat_provider.dart';
 import 'package:finanzas_ia/providers/speech_provider.dart';
@@ -31,7 +32,10 @@ class _FakeLlmService extends LlmService {
   _FakeLlmService();
 
   @override
-  Future<LlmResponse> classify({required String text}) async {
+  Future<LlmResponse> classify({
+    required String text,
+    List<ChatMessage> historial = const [],
+  }) async {
     return const LlmResponse(
       tipoRespuesta: TipoRespuesta.conversacion,
       mensajeParaUsuario: 'Entendido, ¿quieres registrar algo más?',

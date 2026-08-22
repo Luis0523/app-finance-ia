@@ -58,6 +58,30 @@ void main() {
 
     expect(response.tipoRespuesta, TipoRespuesta.consultaReporte);
     expect(response.datosTransaccion, isNull);
+    expect(response.datosConsulta, isNull);
+  });
+
+  test('parsea datos_consulta en consulta_reporte', () {
+    const json = '''
+    {
+      "tipo_respuesta": "consulta_reporte",
+      "mensaje_para_usuario": "Te muestro tus egresos del mes.",
+      "datos_transaccion": null,
+      "datos_consulta": {
+        "tipo_reporte": "egresos",
+        "periodo": "mes_actual",
+        "categoria_nivel1": null
+      }
+    }
+    ''';
+
+    final response = LlmResponse.fromJson(json);
+
+    expect(response.tipoRespuesta, TipoRespuesta.consultaReporte);
+    expect(response.datosConsulta, isNotNull);
+    expect(response.datosConsulta!.tipoReporte, 'egresos');
+    expect(response.datosConsulta!.periodo, 'mes_actual');
+    expect(response.datosConsulta!.categoriaNivel1, isNull);
   });
 
   test('monto numérico como string se convierte a double', () {

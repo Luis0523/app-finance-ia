@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:finanzas_ia/models/chat_message.dart';
 import 'package:finanzas_ia/models/llm_response.dart';
 import 'package:finanzas_ia/providers/chat_provider.dart';
 import 'package:finanzas_ia/services/llm_service.dart';
@@ -11,9 +12,14 @@ class _FakeLlmService extends LlmService {
 
   final List<LlmResponse> responses;
   int calls = 0;
+  List<List<ChatMessage>> historiales = [];
 
   @override
-  Future<LlmResponse> classify({required String text}) async {
+  Future<LlmResponse> classify({
+    required String text,
+    List<ChatMessage> historial = const [],
+  }) async {
+    historiales.add(historial);
     if (responses.isEmpty || calls >= responses.length) {
       throw LlmException('fallo simulado del LLM');
     }
@@ -42,6 +48,15 @@ LlmResponse _conversacion() {
     tipoRespuesta: TipoRespuesta.conversacion,
     mensajeParaUsuario: 'Hola, ¿en qué te ayudo?',
     datosTransaccion: null,
+  );
+}
+
+LlmResponse _consultaReporte() {
+  return const LlmResponse(
+    tipoRespuesta: TipoRespuesta.consultaReporte,
+    mensajeParaUsuario: 'Te muestro tus totales del mes.',
+    datosTransaccion: null,
+    datosConsulta: DatosConsulta(tipoReporte: 'ambos', periodo: 'mes_actual'),
   );
 }
 
@@ -170,4 +185,73 @@ void main() {
     expect(controller.state.isSaving, isFalse);
     expect(controller.state.messages.last.text, contains('No se pudo guardar'));
   });
+
+  test('consulta de reporte agrega mensaje con totales del mes', () async {
+    final repo = FakeRepository();
+    final controller = ChatController(_FakeLlmService([_consultaReporte()]), repo);
+
+    await controller.sendMessage('¿cuánto gasté este mes?');
+
+    final message = controller.state.messages.last;
+    expect(message.isUser, isFalse);
+    expect(message.reporte, isNotNull);
+    expect(message.reporte!.ingresos, 500);
+    expect(message.reporte!.egresos, 300);
+    expect(message.reporte!.balance, 200);
+    expect(controller.state.pendingTransaction, isNull);
+    expect(repo.totalesConsultas, 1);
+    expect(repo.conversaciones, 1);
+  });
+
+  test('envía el historial previo como contexto al LLM', () async {
+    final llm = _FakeLlmService([_conversacion(), _transaccion()]);
+    final controller = ChatController(llm, FakeRepository());
+
+    await controller.sendMessage('hola');
+    await controller.sendMessage('a eso me refiero');
+
+    // Primer mensaje: sin historial.
+    expect(llm.historiales[0], isEmpty);
+
+    // Segundo mensaje: el historial incluye el primer par (usuario + asistente).
+    final segundo = llm.historiales[1];
+    expect(segundo.length, 2);
+    expect(segundo[0].isUser, isTrue);
+    expect(segundo[0].text, 'hola');
+    expect(segundo[1].isUser, isFalse);
+    expect(segundo[1].text, 'Hola, ¿en qué te ayudo?');
+  });
+
+  test('un Error (no Exception) del LLM no deja atascado isSending', () async {
+    final repo = FakeRepository();
+    final controller = ChatController(_LlmmConError(), repo);
+
+    await controller.sendMessage('hola');
+
+    expect(controller.state.isSending, isFalse);
+    expect(controller.state.pendingTransaction, isNull);
+    expect(controller.state.messages.last.text, contains('error'));
+  });
+
+  test('un Error al persistir restaura la tarjeta sin atascar isSaving', () async {
+    final repo = FakeRepository()..errorEnInsertar = StateError('boom');
+    final controller = ChatController(_FakeLlmService([_transaccion()]), repo);
+
+    await controller.sendMessage('vendí Q200 de fruta hoy');
+    await controller.acceptPendingTransaction();
+
+    expect(controller.state.pendingTransaction, isNotNull);
+    expect(controller.state.isSaving, isFalse);
+    expect(controller.state.messages.last.text, contains('No se pudo guardar'));
+  });
+}
+
+class _LlmmConError extends LlmService {
+  @override
+  Future<LlmResponse> classify({
+    required String text,
+    List<ChatMessage> historial = const [],
+  }) async {
+    throw StateError('boom del LLM');
+  }
 }

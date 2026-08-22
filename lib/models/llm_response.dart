@@ -51,16 +51,41 @@ class DatosTransaccion {
   }
 }
 
+class DatosConsulta {
+  const DatosConsulta({
+    this.tipoReporte,
+    this.periodo,
+    this.categoriaNivel1,
+  });
+
+  /// 'ingresos' | 'egresos' | 'ambos' | null
+  final String? tipoReporte;
+
+  /// 'hoy' | 'mes_actual' | 'mes_pasado' | null
+  final String? periodo;
+
+  /// Una de las 8 categorías de nivel 1 o null.
+  final String? categoriaNivel1;
+
+  factory DatosConsulta.fromMap(Map<String, dynamic> map) => DatosConsulta(
+        tipoReporte: map['tipo_reporte']?.toString(),
+        periodo: map['periodo']?.toString(),
+        categoriaNivel1: map['categoria_nivel1']?.toString(),
+      );
+}
+
 class LlmResponse {
   const LlmResponse({
     required this.tipoRespuesta,
     required this.mensajeParaUsuario,
     required this.datosTransaccion,
+    this.datosConsulta,
   });
 
   final TipoRespuesta tipoRespuesta;
   final String mensajeParaUsuario;
   final DatosTransaccion? datosTransaccion;
+  final DatosConsulta? datosConsulta;
 
   factory LlmResponse.fromJson(String json) {
     final map = jsonDecode(json) as Map<String, dynamic>;
@@ -71,6 +96,11 @@ class LlmResponse {
           ? null
           : DatosTransaccion.fromMap(
               map['datos_transaccion'] as Map<String, dynamic>,
+            ),
+      datosConsulta: map['datos_consulta'] == null
+          ? null
+          : DatosConsulta.fromMap(
+              map['datos_consulta'] as Map<String, dynamic>,
             ),
     );
   }

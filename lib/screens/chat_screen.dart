@@ -234,8 +234,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     itemCount: chat.messages.length,
                     itemBuilder: (context, index) {
                       final message = chat.messages[index];
-                      if (message.isUser) {
-                        return _MessageBubble(message: message);
+                      if (message.reporte != null) {
+                        return _ReporteCard(message: message);
                       }
                       return _MessageBubble(message: message);
                     },
@@ -576,6 +576,108 @@ class _TransactionCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ReporteCard extends StatelessWidget {
+  const _ReporteCard({required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final totales = message.reporte!;
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (message.text.isNotEmpty)
+                Text(message.text, style: theme.textTheme.bodyLarge),
+              if (message.text.isNotEmpty) const SizedBox(height: 12),
+              _TotalRow(
+                label: 'Ingresos',
+                monto: totales.ingresos,
+                color: Colors.green,
+                cantidad: totales.cantidadIngresos,
+              ),
+              const SizedBox(height: 8),
+              _TotalRow(
+                label: 'Egresos',
+                monto: totales.egresos,
+                color: theme.colorScheme.error,
+                cantidad: totales.cantidadEgresos,
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Divider(height: 1),
+              ),
+              _TotalRow(
+                label: 'Balance',
+                monto: totales.balance,
+                color: totales.balance >= 0 ? Colors.green : theme.colorScheme.error,
+                cantidad: null,
+                bold: true,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TotalRow extends StatelessWidget {
+  const _TotalRow({
+    required this.label,
+    required this.monto,
+    required this.color,
+    this.cantidad,
+    this.bold = false,
+  });
+
+  final String label;
+  final double monto;
+  final Color color;
+  final int? cantidad;
+  final bool bold;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final estilo = (bold
+            ? theme.textTheme.titleMedium
+            : theme.textTheme.bodyLarge)!
+        .copyWith(color: color, fontWeight: bold ? FontWeight.bold : null);
+
+    return Row(
+      children: [
+        Expanded(child: Text(label, style: theme.textTheme.bodyLarge)),
+        if (cantidad != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Text(
+              '($cantidad)',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        Text('Q${monto.toStringAsFixed(2)}', style: estilo),
+      ],
     );
   }
 }
