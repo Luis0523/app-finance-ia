@@ -39,6 +39,20 @@ Map<String, dynamic> _respuesta(String content) => {
       ],
     };
 
+Map<String, dynamic> _respuestaToolCall(String arguments) => {
+      'choices': [
+        {
+          'message': {
+            'tool_calls': [
+              {
+                'function': {'arguments': arguments},
+              },
+            ],
+          },
+        },
+      ],
+    };
+
 const _jsonValido =
     '{"tipo_respuesta": "conversacion", "mensaje_para_usuario": "Hola", '
     '"datos_transaccion": null, "datos_consulta": null}';
@@ -78,5 +92,35 @@ void main() {
       service.classify(text: 'hola'),
       throwsA(isA<LlmException>()),
     );
+  });
+
+  test('parsea la respuesta vía tool_calls (function calling)', () async {
+    final adapter = _FakeAdapter([
+      _respuestaToolCall(_jsonValido),
+    ]);
+    final service = LlmService(
+      dio: Dio()..httpClientAdapter = adapter,
+      apiKey: 'sk-test',
+    );
+
+    final respuesta = await service.classify(text: 'hola');
+
+    expect(respuesta.tipoRespuesta, TipoRespuesta.conversacion);
+    expect(respuesta.mensajeParaUsuario, 'Hola');
+    expect(adapter.llamadas, 1);
+  });
+
+  test('tolera prosa alrededor del JSON', () async {
+    final adapter = _FakeAdapter([
+      _respuesta('Aquí va: $_jsonValido  Espero te sirva.'),
+    ]);
+    final service = LlmService(
+      dio: Dio()..httpClientAdapter = adapter,
+      apiKey: 'sk-test',
+    );
+
+    final respuesta = await service.classify(text: 'hola');
+
+    expect(respuesta.tipoRespuesta, TipoRespuesta.conversacion);
   });
 }

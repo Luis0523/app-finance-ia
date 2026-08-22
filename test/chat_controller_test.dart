@@ -43,6 +43,20 @@ LlmResponse _transaccion() {
   );
 }
 
+LlmResponse _transaccionDe300() {
+  return LlmResponse(
+    tipoRespuesta: TipoRespuesta.transaccion,
+    mensajeParaUsuario: 'Detecté una venta de Q300. ¿Confirmas?',
+    datosTransaccion: const DatosTransaccion(
+      monto: 300,
+      tipo: 'ingreso',
+      categoriaNivel1Sugerida: 'Ingresos',
+      categoriaNivel2Sugerida: 'Venta de producto',
+      confianza: 0.9,
+    ),
+  );
+}
+
 LlmResponse _conversacion() {
   return const LlmResponse(
     tipoRespuesta: TipoRespuesta.conversacion,
@@ -231,6 +245,21 @@ void main() {
     expect(controller.state.isSending, isFalse);
     expect(controller.state.pendingTransaction, isNull);
     expect(controller.state.messages.last.text, contains('error'));
+  });
+
+  test('tras guardar, la siguiente tarjeta no queda en isSaving', () async {
+    final repo = FakeRepository();
+    final llm = _FakeLlmService([_transaccion(), _transaccionDe300()]);
+    final controller = ChatController(llm, repo);
+
+    await controller.sendMessage('vendí Q200 de fruta hoy');
+    await controller.acceptPendingTransaction();
+    expect(controller.state.isSaving, isFalse);
+
+    await controller.sendMessage('vendí Q300 de tomate');
+    expect(controller.state.pendingTransaction, isNotNull);
+    expect(controller.state.isSaving, isFalse);
+    expect(controller.state.pendingTransaction!.datos.monto, 300);
   });
 
   test('un Error al persistir restaura la tarjeta sin atascar isSaving', () async {

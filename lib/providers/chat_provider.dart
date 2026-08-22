@@ -148,6 +148,7 @@ class ChatController extends StateNotifier<ChatState> {
           response.datosTransaccion != null) {
         state = state.copyWith(
           isSending: false,
+          isSaving: false,
           pendingTransaction: PendingTransaction(
             messageId: _uuid.v4(),
             mensajeParaUsuario: response.mensajeParaUsuario,
@@ -233,6 +234,7 @@ class ChatController extends StateNotifier<ChatState> {
     state = state.copyWith(
       messages: [...state.messages, message],
       isSending: false,
+      isSaving: false,
     );
   }
 
@@ -247,6 +249,7 @@ class ChatController extends StateNotifier<ChatState> {
     state = state.copyWith(
       messages: [...state.messages, message],
       isSending: false,
+      isSaving: false,
     );
   }
 

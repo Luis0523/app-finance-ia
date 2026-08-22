@@ -26,8 +26,8 @@ class LlmService {
         _baseUrl = baseUrl,
         // ignore: prefer_initializing_formals
         _model = model {
-    _dio.options.connectTimeout = const Duration(seconds: 30);
-    _dio.options.receiveTimeout = const Duration(seconds: 90);
+    _dio.options.connectTimeout = const Duration(seconds: 20);
+    _dio.options.receiveTimeout = const Duration(seconds: 45);
   }
 
   final Dio _dio;
@@ -39,46 +39,77 @@ class LlmService {
   String get baseUrl => _baseUrl;
   String get model => _model;
 
+  static const _toolName = 'clasificar_mensaje';
+
   static const systemPrompt = '''
-Eres un asistente que clasifica mensajes de microempresarios guatemaltecos sobre
-su negocio. Debes responder EXCLUSIVAMENTE en JSON válido, sin texto adicional,
-siguiendo este esquema exacto: {"tipo_respuesta", "mensaje_para_usuario", "datos_transaccion", "datos_consulta"}.
+Eres un asistente financiero para microempresarios guatemaltecos. Usa SIEMPRE la
+herramienta clasificar_mensaje para responder, completando tipo_respuesta,
+mensaje_para_usuario, datos_transaccion y datos_consulta.
 
 Las categorías de nivel 1 disponibles son: Ingresos, Costos de venta, Gastos
 operativos, Gastos administrativos, Otros gastos, Inversiones, Préstamos y
 financiamiento, Retiros personales.
 
 Si el mensaje describe una transacción de dinero (venta, compra, pago, gasto,
-préstamo, retiro), usa tipo_respuesta = "transaccion", llena datos_transaccion
-y deja datos_consulta = null.
-Si el mensaje es un saludo, pregunta general o algo ambiguo sin datos financieros
-claros, usa tipo_respuesta = "conversacion" y tanto datos_transaccion como
-datos_consulta = null.
-Si el usuario pide ver un reporte o resumen (totales, cuánto gastó/ganó, resumen
-de ingresos o egresos), usa tipo_respuesta = "consulta_reporte", deja
-datos_transaccion = null y llena datos_consulta.
+préstamo, retiro), usa tipo_respuesta = "transaccion" y llena datos_transaccion.
+Si es un saludo, pregunta general o algo ambiguo sin datos financieros claros,
+usa tipo_respuesta = "conversacion".
+Si el usuario pide un reporte o resumen (totales, cuánto gastó/ganó), usa
+tipo_respuesta = "consulta_reporte" y llena datos_consulta.
 
 Usa los mensajes anteriores de la conversación como contexto para interpretar el
-mensaje actual (por ejemplo, si el usuario dice "y esto" o "la otra venta",
-refiere a algo ya mencionado). Clasifica siempre el mensaje actual con el esquema
-JSON indicado, nunca respondas por los mensajes previos.
-
-Formato exacto de datos_transaccion cuando es transaccion:
-{
-  "monto": <número en quetzales>,
-  "tipo": "ingreso" o "egreso",
-  "categoria_nivel1_sugerida": "<una de las 8 categorías de nivel 1>",
-  "categoria_nivel2_sugerida": "<subcategoría razonable para un negocio>",
-  "confianza": <número entre 0 y 1>
-}
-
-Formato exacto de datos_consulta cuando es consulta_reporte:
-{
-  "tipo_reporte": "ingresos" o "egresos" o "ambos",
-  "periodo": "hoy" o "mes_actual" o "mes_pasado",
-  "categoria_nivel1": "<una de las 8 categorías de nivel 1 o null>"
-}
+mensaje actual (por ejemplo, si el usuario dice "y esto" o "esa fruta", refiere a
+algo ya mencionado).
 ''';
+
+  static const _toolDefinicion = {
+    'type': 'function',
+    'function': {
+      'name': _toolName,
+      'description':
+          'Clasifica el mensaje del microempresario y devuelve la estructura de respuesta.',
+      'parameters': {
+        'type': 'object',
+        'properties': {
+          'tipo_respuesta': {
+            'type': 'string',
+            'enum': ['transaccion', 'conversacion', 'consulta_reporte'],
+          },
+          'mensaje_para_usuario': {'type': 'string'},
+          'datos_transaccion': {
+            'type': ['object', 'null'],
+            'properties': {
+              'monto': {'type': 'number'},
+              'tipo': {'type': 'string', 'enum': ['ingreso', 'egreso']},
+              'categoria_nivel1_sugerida': {'type': 'string'},
+              'categoria_nivel2_sugerida': {'type': 'string'},
+              'confianza': {'type': 'number'},
+            },
+          },
+          'datos_consulta': {
+            'type': ['object', 'null'],
+            'properties': {
+              'tipo_reporte': {
+                'type': 'string',
+                'enum': ['ingresos', 'egresos', 'ambos'],
+              },
+              'periodo': {
+                'type': 'string',
+                'enum': ['hoy', 'mes_actual', 'mes_pasado'],
+              },
+              'categoria_nivel1': {'type': ['string', 'null']},
+            },
+          },
+        },
+        'required': [
+          'tipo_respuesta',
+          'mensaje_para_usuario',
+          'datos_transaccion',
+          'datos_consulta',
+        ],
+      },
+    },
+  };
 
   Future<LlmResponse> classify({
     required String text,
@@ -116,15 +147,26 @@ Formato exacto de datos_consulta cuando es consulta_reporte:
           data: {
             'model': _model,
             'messages': messages,
-            'response_format': {'type': 'json_object'},
             'temperature': 0.2,
             'max_tokens': 1024,
+            'tools': [_toolDefinicion],
+            'tool_choice': {
+              'type': 'function',
+              'function': {'name': _toolName},
+            },
           },
         );
 
-        final content =
-            response.data['choices'][0]['message']['content'] as String;
-        final parsed = LlmResponse.fromJson(_cleanJson(content));
+        final message =
+            response.data['choices'][0]['message'] as Map<String, dynamic>;
+        String? content;
+        final toolCalls = message['tool_calls'];
+        if (toolCalls is List && toolCalls.isNotEmpty) {
+          content =
+              (toolCalls[0] as Map)['function']?['arguments']?.toString();
+        }
+        content ??= message['content']?.toString();
+        final parsed = LlmResponse.fromJson(_extraerJson(content ?? ''));
         return LlmResponse(
           tipoRespuesta: parsed.tipoRespuesta,
           mensajeParaUsuario: normalizeCurrencyText(parsed.mensajeParaUsuario),
@@ -165,12 +207,19 @@ Formato exacto de datos_consulta cuando es consulta_reporte:
     return Future.delayed(Duration(milliseconds: 600 * (intento + 1)));
   }
 
-  String _cleanJson(String content) {
+  /// Extrae el primer objeto JSON completo del texto, tolerando texto
+  /// envolvente (prosa o code fences) que algunos modelos añaden.
+  String _extraerJson(String content) {
     var text = content.trim();
     if (text.startsWith('```')) {
       text = text
           .replaceAll(RegExp(r'^```[a-zA-Z]*\n?'), '')
           .replaceAll(RegExp(r'\n?```$'), '');
+    }
+    final inicio = text.indexOf('{');
+    final fin = text.lastIndexOf('}');
+    if (inicio != -1 && fin > inicio) {
+      return text.substring(inicio, fin + 1);
     }
     return text;
   }
