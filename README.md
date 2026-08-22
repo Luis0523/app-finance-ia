@@ -29,7 +29,7 @@ Ingresos, Costos de venta, Gastos operativos, Gastos administrativos, Otros gast
 | Manejo de estado | Riverpod |
 | Backend / base de datos | Supabase (Postgres) |
 | Voz a texto | `speech_to_text` (nativo del dispositivo) |
-| Clasificación / NLU | LLM (Claude o GPT) con salida forzada en JSON |
+| Clasificación / NLU | LLM (DeepSeek / OpenAI-compatible) con function calling (JSON forzado) |
 | HTTP client | `dio` |
 | Variables de entorno | `flutter_dotenv` |
 
@@ -41,9 +41,10 @@ Ingresos, Costos de venta, Gastos operativos, Gastos administrativos, Otros gast
 |---|---|---|
 | **Fase 0** | Setup: proyecto Flutter, esquema SQL en Supabase, seed de 8 categorías | ✅ |
 | **Fase 1** | Captura de voz y transcripción editable | ✅ |
-| **Fase 2** | Envío al LLM y enrutamiento de intención (en rama `feature/fase-2-llm-enrutamiento`) | 🔨 |
-| **Fase 3** | Confirmación y persistencia en Supabase | ⏳ |
-| **Fase 4** | Totales básicos del mes (vistas `vista_ingresos` / `vista_egresos`) | ⏳ |
+| **Fase 2** | Envío al LLM y enrutamiento de intención (function calling con contexto) | ✅ |
+| **Fase 3** | Confirmación y persistencia en Supabase (`transacciones` + `conversaciones`) | ✅ |
+| **Fase 4** | Totales del mes (RPC `obtener_totales_mes`) | ✅ |
+| **Fase 5** | Consultas específicas (última transacción) y análisis con IA sobre agregados por categoría | ✅ |
 
 ### Criterios de aceptación por fase
 
@@ -52,6 +53,7 @@ Ingresos, Costos de venta, Gastos operativos, Gastos administrativos, Otros gast
 - **Fase 2**: probar con al menos 15 mensajes reales y medir el acierto del enrutamiento (`tipo_respuesta`).
 - **Fase 3**: el ciclo punta a punta funciona y verifica en `transacciones` y `conversaciones`.
 - **Fase 4**: los totales mostrados coinciden con la suma manual de las transacciones.
+- **Fase 5**: preguntas de "última venta/egreso" muestran la transacción real y "¿qué tal ves mi balance?" devuelve un análisis con IA sobre los agregados.
 
 ---
 
