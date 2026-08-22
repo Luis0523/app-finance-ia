@@ -272,6 +272,15 @@ class ChatController extends StateNotifier<ChatState> {
       case 'inventario':
         await _manejarInventario(mensajeDelLlm);
         break;
+      case 'ganancias':
+        await _manejarGanancias(mensajeDelLlm);
+        break;
+      case 'actualizar_producto':
+        await _manejarActualizarProducto(consulta!, mensajeDelLlm);
+        break;
+      case 'ajustar_inventario':
+        await _manejarAjustarInventario(consulta!, mensajeDelLlm);
+        break;
       case 'viabilidad':
         await _manejarViabilidad(consulta!);
         break;
@@ -359,6 +368,7 @@ class ChatController extends StateNotifier<ChatState> {
           'Cant.',
           'C. unit.',
           'Total',
+          'Ganancia',
         ],
         columnaColor: 5,
         tipos: lista.map((t) => t.tipo).toList(),
@@ -373,6 +383,7 @@ class ChatController extends StateNotifier<ChatState> {
                     ? 'Q${t.precioUnitario!.toStringAsFixed(2)}'
                     : '—',
                 'Q${t.monto.toStringAsFixed(2)}',
+                t.utilidad != null ? 'Q${t.utilidad!.toStringAsFixed(2)}' : '—',
               ],
             )
             .toList(),
@@ -434,8 +445,16 @@ class ChatController extends StateNotifier<ChatState> {
         (acc, p) => acc + p.valorTotal,
       );
       final tabla = TablaDatos(
-        titulo: 'Inventario ($productos.length productos)',
-        headers: const ['Producto', 'Compra', 'Venta', 'Exist.', 'Valor'],
+        titulo: 'Inventario (${productos.length} productos)',
+        headers: const [
+          'Producto',
+          'Compra',
+          'Venta',
+          'Exist.',
+          'Valor',
+          'Ganancia',
+          'Estado',
+        ],
         rows: productos
             .map(
               (p) => [
@@ -444,6 +463,10 @@ class ChatController extends StateNotifier<ChatState> {
                 'Q${p.precioVenta.toStringAsFixed(2)}',
                 p.existencias.toStringAsFixed(0),
                 'Q${p.valorTotal.toStringAsFixed(2)}',
+                p.utilidadUnitaria != null
+                    ? 'Q${p.utilidadUnitaria!.toStringAsFixed(2)}'
+                    : '—',
+                _estadoInventario(p.estado),
               ],
             )
             .toList(),
@@ -454,6 +477,139 @@ class ChatController extends StateNotifier<ChatState> {
       _addTablaMessage(texto, tabla);
     } on Exception catch (e) {
       _addAssistantMessage('No se pudo obtener el inventario: $e');
+    }
+  }
+
+  Future<void> _manejarGanancias(String mensaje) async {
+    try {
+      final resumen = await _repo.obtenerResumenGanancias();
+      final margen = '${(resumen.margen * 100).toStringAsFixed(1)}%';
+      final texto = mensaje.isEmpty
+          ? 'En el mes actual:'
+          : '$mensaje En el mes actual:';
+      _addAssistantMessage(
+        '$texto\n'
+        '• Ventas: Q${resumen.ingresos.toStringAsFixed(2)} '
+        '(${resumen.cantidadVentas} ventas)\n'
+        '• Costo de lo vendido: Q${resumen.costoVentas.toStringAsFixed(2)}\n'
+        '• Ganancia: Q${resumen.utilidad.toStringAsFixed(2)} '
+        '(margen $margen)',
+      );
+    } on Exception catch (e) {
+      _addAssistantMessage('No se pudo calcular la ganancia: $e');
+    }
+  }
+
+  Future<void> _manejarActualizarProducto(
+    DatosConsulta consulta,
+    String mensaje,
+  ) async {
+    final producto = consulta.producto?.trim();
+    if (producto == null || producto.isEmpty) {
+      _addAssistantMessage(
+        '¿Sobre qué producto quieres actualizar el precio o el stock mínimo? '
+        'Dime su nombre.',
+      );
+      return;
+    }
+
+    final precioVenta = consulta.precioVenta;
+    final precioCompra = consulta.precioCompra;
+    final stockMinimo = consulta.stockMinimo;
+    if (precioVenta == null && precioCompra == null && stockMinimo == null) {
+      _addAssistantMessage(
+        '¿Qué quieres actualizar de $producto? Por ejemplo: el precio de venta, '
+        'el precio de compra o el stock mínimo.',
+      );
+      return;
+    }
+
+    try {
+      final ok = await _repo.actualizarProducto(
+        nombre: producto,
+        precioVenta: precioVenta,
+        precioCompra: precioCompra,
+        stockMinimo: stockMinimo,
+      );
+      if (!ok) {
+        _addAssistantMessage(
+          'No encontré el producto "$producto". Revisa el nombre o regístralo '
+          'con una compra primero.',
+        );
+        return;
+      }
+
+      final cambios = <String>[];
+      if (precioVenta != null) {
+        cambios.add('precio de venta a Q${precioVenta.toStringAsFixed(2)}');
+      }
+      if (precioCompra != null) {
+        cambios.add('precio de compra a Q${precioCompra.toStringAsFixed(2)}');
+      }
+      if (stockMinimo != null) {
+        cambios.add('stock mínimo a ${stockMinimo.toStringAsFixed(0)}');
+      }
+      _addAssistantMessage(
+        '${mensaje.isEmpty ? '' : '$mensaje '}'
+        '✓ Actualicé ${cambios.join(' y ')} de $producto.',
+      );
+    } on Exception catch (e) {
+      _addAssistantMessage('No se pudo actualizar el producto: $e');
+    }
+  }
+
+  Future<void> _manejarAjustarInventario(
+    DatosConsulta consulta,
+    String mensaje,
+  ) async {
+    final producto = consulta.producto?.trim();
+    final cantidad = consulta.cantidadObjetivo;
+    if (producto == null || producto.isEmpty) {
+      _addAssistantMessage(
+        '¿De qué producto quieres corregir el inventario? Dime su nombre.',
+      );
+      return;
+    }
+    if (cantidad == null) {
+      _addAssistantMessage(
+        '¿A cuánto queda el inventario de $producto? Dime la cantidad.',
+      );
+      return;
+    }
+
+    try {
+      final ok = await _repo.ajustarInventario(
+        nombre: producto,
+        cantidadObjetivo: cantidad,
+      );
+      if (!ok) {
+        _addAssistantMessage(
+          'No encontré el producto "$producto". Revisa el nombre o regístralo '
+          'con una compra primero.',
+        );
+        return;
+      }
+
+      _addAssistantMessage(
+        '${mensaje.isEmpty ? '' : '$mensaje '}'
+        '✓ Ajusté el inventario de $producto a '
+        '${cantidad.toStringAsFixed(0)}.',
+      );
+    } on Exception catch (e) {
+      _addAssistantMessage('No se pudo ajustar el inventario: $e');
+    }
+  }
+
+  String _estadoInventario(String? estado) {
+    switch (estado) {
+      case 'agotado':
+        return 'Agotado';
+      case 'bajo':
+        return 'Bajo';
+      case 'ok':
+        return 'OK';
+      default:
+        return '—';
     }
   }
 
@@ -594,8 +750,11 @@ class ChatController extends StateNotifier<ChatState> {
           ? ' (${d.cantidad!.toStringAsFixed(0)} × '
                 'Q${d.precioUnitario!.toStringAsFixed(2)})'
           : '';
+      final inventario = _aplicaInventario(d)
+          ? ' e inventario actualizado para ${d.productoSugerido!.trim()}'
+          : '';
       _addAssistantMessage(
-        '✓ Registrado: $tipo de $monto$desglose en $categoria.',
+        '✓ Registrado: $tipo de $monto$desglose en $categoria$inventario.',
         tipoMovimiento: d.tipo,
       );
     } catch (e) {
@@ -605,23 +764,47 @@ class ChatController extends StateNotifier<ChatState> {
   }
 
   Future<void> _persistir(PendingTransaction pending) async {
+    final d = pending.datos;
     final categoriaId = await _repo.buscarOCrearCategoriaNivel2(
-      categoriaNivel1: pending.datos.categoriaNivel1Sugerida,
-      categoriaNivel2: pending.datos.categoriaNivel2Sugerida,
-      tipo: pending.datos.tipo,
+      categoriaNivel1: d.categoriaNivel1Sugerida,
+      categoriaNivel2: d.categoriaNivel2Sugerida,
+      tipo: d.tipo,
     );
+
+    // Compras: primero se crea/ubica el producto y se registra en `compras`
+    // (el trigger del kardex calcula existencia y costo promedio).
+    String? productoId;
+    final esCompra = _esCompra(d);
+    final esVenta = _esVenta(d);
+    if (esCompra || esVenta) {
+      productoId = await _repo.buscarOCrearProducto(
+        nombre: d.productoSugerido!.trim(),
+        precioCompra: esCompra ? d.precioUnitario : null,
+        precioVenta: esVenta ? d.precioUnitario : null,
+      );
+    }
 
     final transaccionId = await _repo.insertarTransaccion(
       categoriaId: categoriaId,
-      monto: pending.datos.monto,
-      tipo: pending.datos.tipo,
+      monto: d.monto,
+      tipo: d.tipo,
       descripcionOriginal: pending.descripcionOriginal,
-      descripcionNormalizada: _descripcionNormalizada(pending.datos),
+      descripcionNormalizada: _descripcionNormalizada(d),
       origen: pending.origen,
-      confianza: pending.datos.confianza,
-      cantidad: pending.datos.cantidad,
-      precioUnitario: pending.datos.precioUnitario,
+      confianza: d.confianza,
+      cantidad: d.cantidad,
+      precioUnitario: d.precioUnitario,
+      productoId: esVenta ? productoId : null,
     );
+
+    if (esCompra && productoId != null && d.cantidad != null) {
+      await _repo.registrarCompra(
+        productoId: productoId,
+        cantidad: d.cantidad!,
+        costoUnitario: d.precioUnitario ?? 0,
+        transaccionId: transaccionId,
+      );
+    }
 
     final conversacionId = pending.conversacionId;
     if (conversacionId != null) {
@@ -630,6 +813,25 @@ class ChatController extends StateNotifier<ChatState> {
         transaccionId: transaccionId,
       );
     }
+  }
+
+  bool _aplicaInventario(DatosTransaccion datos) {
+    final producto = datos.productoSugerido?.trim();
+    return producto != null &&
+        producto.isNotEmpty &&
+        datos.cantidad != null &&
+        datos.cantidad! > 0 &&
+        (_esCompra(datos) || _esVenta(datos));
+  }
+
+  bool _esCompra(DatosTransaccion datos) {
+    return datos.tipo == 'egreso' &&
+        (datos.accionInventario?.trim() ?? '') == 'compra';
+  }
+
+  bool _esVenta(DatosTransaccion datos) {
+    return datos.tipo == 'ingreso' &&
+        (datos.accionInventario?.trim() ?? '') == 'venta';
   }
 
   String _descripcionNormalizada(DatosTransaccion datos) {

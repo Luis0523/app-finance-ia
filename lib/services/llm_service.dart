@@ -19,13 +19,13 @@ class LlmService {
     String apiKey = '',
     String baseUrl = 'https://api.deepseek.com',
     String model = 'deepseek-chat',
-  })  : _dio = dio ?? Dio(),
-        // ignore: prefer_initializing_formals
-        _apiKey = apiKey,
-        // ignore: prefer_initializing_formals
-        _baseUrl = baseUrl,
-        // ignore: prefer_initializing_formals
-        _model = model {
+  }) : _dio = dio ?? Dio(),
+       // ignore: prefer_initializing_formals
+       _apiKey = apiKey,
+       // ignore: prefer_initializing_formals
+       _baseUrl = baseUrl,
+       // ignore: prefer_initializing_formals
+       _model = model {
     _dio.options.connectTimeout = const Duration(seconds: 20);
     _dio.options.receiveTimeout = const Duration(seconds: 45);
   }
@@ -62,6 +62,15 @@ bien redactada para mostrar en listados, sin monto, sin cantidad y sin precio
 unitario, por ejemplo: "Compra de bananos", "Venta de gaseosas", "Pago de luz".
 No uses ahí el mensaje conversacional ni preguntas de confirmación.
 
+Para inventario, cuando la transacción mencione un producto específico y cantidad
+clara, llena también "producto_sugerido" con el nombre corregido (ej. "Bananos",
+"Gaseosas"). Llena "accion_inventario" con "compra" si es una compra/egreso de
+mercadería o insumos, o "venta" si es una venta/ingreso de producto. Llena
+"confianza_inventario" de 0 a 1. El costo/promedio del inventario lo calcula el
+sistema automáticamente; tú solo indicas producto y acción. Si no hay producto
+claro o no hay cantidad, deja estos campos en null y pregunta antes de afectar
+inventario.
+
 Si detectas que parece una transacción pero falta el monto o datos clave, NO uses
 "transaccion": usa "conversacion" y pregúntale al usuario de forma natural y
 amable por lo que falta (ej. "¿De cuánto fue la venta?", "¿Cuántas unidades y a
@@ -82,6 +91,18 @@ datos_consulta elige tipo_consulta:
 - "viabilidad" cuando pregunte si puede comprar algo o si es viable comprar; llena
   "monto" con el costo total planeado.
 - "inventario" cuando pregunte por existencias, productos o stock.
+- "ganancias" cuando pregunte por la ganancia, utilidad, margen o si le queda
+  ganancia ("¿cuánto gané?", "¿cuál es mi ganancia?", "¿me conviene vender?",
+  "¿cuánto es mi margen?").
+- "actualizar_producto" cuando el usuario pida cambiar los precios o stock
+  mínimo de un producto que ya existe ("actualiza el precio de venta de gaseosas
+  a 5", "cambia el precio de compra a 3", "configura stock mínimo de bananos en
+  10"). Llena "producto" con el nombre y "precio_venta", "precio_compra" o
+  "stock_minimo" según lo que pida. Usa el contexto previo de la conversación
+  para identificar el producto si el usuario no lo repite.
+- "ajustar_inventario" cuando el usuario quiera corregir las existencias de un
+  producto ("corrige el inventario de gaseosas a 50", "ahora hay 200 bananos",
+  "pon las existencias de gaseosas en 30"). Llena "producto" y "cantidad_objetivo".
 
 Usa los mensajes anteriores de la conversación como contexto para interpretar el
 mensaje actual (por ejemplo, si el usuario dice "y esto" o "esa fruta", refiere a
@@ -92,8 +113,7 @@ algo ya mencionado).
     'type': 'function',
     'function': {
       'name': _toolName,
-      'description':
-          'Clasifica el mensaje del microempresario y devuelve la estructura de respuesta.',
+      'description': 'Clasifica el mensaje del microempresario y devuelve la estructura de respuesta.',
       'parameters': {
         'type': 'object',
         'properties': {
@@ -106,13 +126,32 @@ algo ya mencionado).
             'type': ['object', 'null'],
             'properties': {
               'monto': {'type': 'number'},
-              'tipo': {'type': 'string', 'enum': ['ingreso', 'egreso']},
+              'tipo': {
+                'type': 'string',
+                'enum': ['ingreso', 'egreso'],
+              },
               'categoria_nivel1_sugerida': {'type': 'string'},
               'categoria_nivel2_sugerida': {'type': 'string'},
               'confianza': {'type': 'number'},
-              'descripcion_normalizada': {'type': ['string', 'null']},
-              'cantidad': {'type': ['number', 'null']},
-              'precio_unitario': {'type': ['number', 'null']},
+              'descripcion_normalizada': {
+                'type': ['string', 'null'],
+              },
+              'cantidad': {
+                'type': ['number', 'null'],
+              },
+              'precio_unitario': {
+                'type': ['number', 'null'],
+              },
+              'producto_sugerido': {
+                'type': ['string', 'null'],
+              },
+              'accion_inventario': {
+                'type': ['string', 'null'],
+                'enum': ['compra', 'venta', 'produccion'],
+              },
+              'confianza_inventario': {
+                'type': ['number', 'null'],
+              },
             },
           },
           'datos_consulta': {
@@ -128,6 +167,9 @@ algo ya mencionado).
                   'flujo_caja',
                   'viabilidad',
                   'inventario',
+                  'ganancias',
+                  'actualizar_producto',
+                  'ajustar_inventario',
                 ],
               },
               'tipo_reporte': {
@@ -142,8 +184,27 @@ algo ya mencionado).
                 'type': 'string',
                 'enum': ['hoy', 'mes_actual', 'mes_pasado'],
               },
-              'categoria_nivel1': {'type': ['string', 'null']},
-              'monto': {'type': ['number', 'null']},
+              'categoria_nivel1': {
+                'type': ['string', 'null'],
+              },
+              'monto': {
+                'type': ['number', 'null'],
+              },
+              'producto': {
+                'type': ['string', 'null'],
+              },
+              'precio_venta': {
+                'type': ['number', 'null'],
+              },
+              'precio_compra': {
+                'type': ['number', 'null'],
+              },
+              'stock_minimo': {
+                'type': ['number', 'null'],
+              },
+              'cantidad_objetivo': {
+                'type': ['number', 'null'],
+              },
             },
           },
         },
@@ -167,7 +228,8 @@ algo ya mencionado).
       );
     }
 
-    final endpoint = '${_baseUrl.replaceAll(RegExp(r'/$'), '')}/chat/completions';
+    final endpoint =
+        '${_baseUrl.replaceAll(RegExp(r'/$'), '')}/chat/completions';
 
     final messages = <Map<String, String>>[
       {'role': 'system', 'content': systemPrompt},
@@ -208,8 +270,7 @@ algo ya mencionado).
         String? content;
         final toolCalls = message['tool_calls'];
         if (toolCalls is List && toolCalls.isNotEmpty) {
-          content =
-              (toolCalls[0] as Map)['function']?['arguments']?.toString();
+          content = (toolCalls[0] as Map)['function']?['arguments']?.toString();
         }
         content ??= message['content']?.toString();
         final parsed = LlmResponse.fromJson(_extraerJson(content ?? ''));
@@ -268,10 +329,7 @@ menos cantidad, priorizar proveedores, o que sí proceda). No inventes números 
 no estén en el resumen.
 ''';
 
-  Future<String> analizar({
-    required String resumen,
-    String? prompt,
-  }) async {
+  Future<String> analizar({required String resumen, String? prompt}) async {
     if (_apiKey.isEmpty || _apiKey.contains('tu_key')) {
       throw LlmException(
         'LLM_API_KEY no configurada en .env (usa la key de DeepSeek/OpenAI).',
@@ -279,7 +337,8 @@ no estén en el resumen.
     }
 
     final systemPromptUsado = prompt ?? analisisPrompt;
-    final endpoint = '${_baseUrl.replaceAll(RegExp(r'/$'), '')}/chat/completions';
+    final endpoint =
+        '${_baseUrl.replaceAll(RegExp(r'/$'), '')}/chat/completions';
 
     for (var intento = 0; intento <= _maxReintentos; intento++) {
       try {

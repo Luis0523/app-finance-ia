@@ -79,6 +79,9 @@ LlmResponse _transaccionConDesglose() {
       descripcionNormalizada: 'Compra de bananos',
       cantidad: 340,
       precioUnitario: 10,
+      productoSugerido: 'Bananos',
+      accionInventario: 'compra',
+      confianzaInventario: 0.9,
     ),
   );
 }
@@ -168,6 +171,41 @@ LlmResponse _consultaViabilidad() {
     mensajeParaUsuario: 'Analizo la compra.',
     datosTransaccion: null,
     datosConsulta: DatosConsulta(tipoConsulta: 'viabilidad', monto: 500),
+  );
+}
+
+LlmResponse _consultaGanancias() {
+  return const LlmResponse(
+    tipoRespuesta: TipoRespuesta.consultaReporte,
+    mensajeParaUsuario: 'Aquí va tu ganancia del mes.',
+    datosTransaccion: null,
+    datosConsulta: DatosConsulta(tipoConsulta: 'ganancias'),
+  );
+}
+
+LlmResponse _consultaActualizarProducto() {
+  return const LlmResponse(
+    tipoRespuesta: TipoRespuesta.consultaReporte,
+    mensajeParaUsuario: '',
+    datosTransaccion: null,
+    datosConsulta: DatosConsulta(
+      tipoConsulta: 'actualizar_producto',
+      producto: 'Gaseosas',
+      precioVenta: 5,
+    ),
+  );
+}
+
+LlmResponse _consultaAjustarInventario() {
+  return const LlmResponse(
+    tipoRespuesta: TipoRespuesta.consultaReporte,
+    mensajeParaUsuario: '',
+    datosTransaccion: null,
+    datosConsulta: DatosConsulta(
+      tipoConsulta: 'ajustar_inventario',
+      producto: 'Gaseosas',
+      cantidadObjetivo: 50,
+    ),
   );
 }
 
@@ -470,9 +508,10 @@ void main() {
       'Cant.',
       'C. unit.',
       'Total',
+      'Ganancia',
     ]);
     expect(message.tabla!.rows.length, 1);
-    expect(message.tabla!.rows.first.length, 6);
+    expect(message.tabla!.rows.first.length, 7);
     expect(message.tabla!.rows.first[1], 'Servicios públicos');
     expect(message.tabla!.rows.first[1], isNot(contains('Gastos operativos')));
     expect(repo.ultimoTipoListado, 'egreso');
@@ -505,8 +544,37 @@ void main() {
     final message = controller.state.messages.last;
     expect(message.tabla, isNotNull);
     expect(message.tabla!.titulo, contains('Inventario'));
+    expect(message.tabla!.headers, [
+      'Producto',
+      'Compra',
+      'Venta',
+      'Exist.',
+      'Valor',
+      'Ganancia',
+      'Estado',
+    ]);
+    expect(message.tabla!.rows.first.last, 'OK');
+    expect(message.tabla!.rows.first[5], 'Q40.00');
     expect(message.text, contains('Q800.00'));
     expect(repo.inventarioConsultas, 1);
+  });
+
+  test('ganancias del mes muestra utilidad y margen', () async {
+    final repo = FakeRepository();
+    final controller = ChatController(
+      _FakeLlmService([_consultaGanancias()]),
+      repo,
+    );
+
+    await controller.sendMessage('¿cuánto gané este mes?');
+
+    final message = controller.state.messages.last;
+    expect(message.isUser, isFalse);
+    expect(message.text, contains('Ganancia: Q600.00'));
+    expect(message.text, contains('margen 43.0%'));
+    expect(message.text, contains('Q1400.00'));
+    expect(message.text, contains('Q800.00'));
+    expect(repo.gananciasConsultas, 1);
   });
 
   test(
@@ -591,6 +659,13 @@ void main() {
     final feedback = controller.state.messages.last;
     expect(feedback.text, contains('340 × Q10.00'));
     expect(feedback.text, contains('Q3400.00'));
+    expect(feedback.text, contains('inventario actualizado'));
+    expect(repo.productosCreados, 1);
+    expect(repo.lastProductoInventario, 'Bananos');
+    expect(repo.comprasRegistradas, 1);
+    expect(repo.lastCantidadInventario, 340);
+    expect(repo.lastCostoUnitarioCompra, 10);
+    expect(repo.lastTransaccionInventarioId, repo.lastTransaccionId);
   });
 
   test(
@@ -617,6 +692,122 @@ void main() {
       expect(repo.lastDescripcionNormalizada, isNot(contains('¿correcto')));
     },
   );
+
+  test(
+    'venta con producto crea producto y registra transacción con id',
+    () async {
+      final repo = FakeRepository();
+      final controller = ChatController(
+        _FakeLlmService([
+          LlmResponse(
+            tipoRespuesta: TipoRespuesta.transaccion,
+            mensajeParaUsuario: 'Vendí 50 × Q7.00 = Q350.00, ¿correcto?',
+            datosTransaccion: const DatosTransaccion(
+              monto: 350,
+              tipo: 'ingreso',
+              categoriaNivel1Sugerida: 'Ingresos',
+              categoriaNivel2Sugerida: 'Venta de producto',
+              confianza: 0.9,
+              descripcionNormalizada: 'Venta de gaseosas',
+              cantidad: 50,
+              precioUnitario: 7,
+              productoSugerido: 'Gaseosas',
+              accionInventario: 'venta',
+              confianzaInventario: 0.9,
+            ),
+          ),
+        ]),
+        repo,
+      );
+
+      await controller.sendMessage('vendí 50 gaseosas a 7 quetzales cada una');
+      await controller.acceptPendingTransaction();
+
+      expect(repo.productosCreados, 1);
+      expect(repo.lastProductoInventario, 'Gaseosas');
+      expect(repo.comprasRegistradas, 0);
+      expect(repo.transacciones, 1);
+    },
+  );
+
+  test('actualizar producto cambia precio de venta y confirma', () async {
+    final repo = FakeRepository();
+    final controller = ChatController(
+      _FakeLlmService([_consultaActualizarProducto()]),
+      repo,
+    );
+
+    await controller.sendMessage(
+      'actualiza el precio de venta de gaseosas a 5',
+    );
+
+    final message = controller.state.messages.last;
+    expect(message.isUser, isFalse);
+    expect(message.text, contains('precio de venta a Q5.00'));
+    expect(message.text, contains('Gaseosas'));
+    expect(repo.productosActualizados, 1);
+    expect(repo.lastNombreActualizado, 'Gaseosas');
+    expect(repo.lastPrecioVentaActualizado, 5);
+  });
+
+  test('actualizar producto avisa si no encontró el producto', () async {
+    final repo = FakeRepository()..actualizarProductoResult = false;
+    final controller = ChatController(
+      _FakeLlmService([_consultaActualizarProducto()]),
+      repo,
+    );
+
+    await controller.sendMessage(
+      'actualiza el precio de venta de gaseosas a 5',
+    );
+
+    expect(
+      controller.state.messages.last.text,
+      contains('No encontré el producto'),
+    );
+  });
+
+  test('ajustar inventario corrige existencias y confirma', () async {
+    final repo = FakeRepository();
+    final controller = ChatController(
+      _FakeLlmService([_consultaAjustarInventario()]),
+      repo,
+    );
+
+    await controller.sendMessage('corrige el inventario de gaseosas a 50');
+
+    final message = controller.state.messages.last;
+    expect(message.isUser, isFalse);
+    expect(message.text, contains('Ajusté el inventario de Gaseosas a 50'));
+    expect(repo.ajustesInventario, 1);
+    expect(repo.lastNombreActualizado, 'Gaseosas');
+    expect(repo.lastCantidadObjetivo, 50);
+  });
+
+  test('actualizar producto sin datos pregunta qué actualizar', () async {
+    final repo = FakeRepository();
+    final controller = ChatController(
+      _FakeLlmService([
+        const LlmResponse(
+          tipoRespuesta: TipoRespuesta.consultaReporte,
+          mensajeParaUsuario: '',
+          datosTransaccion: null,
+          datosConsulta: DatosConsulta(
+            tipoConsulta: 'actualizar_producto',
+            producto: 'Gaseosas',
+          ),
+        ),
+      ]),
+      repo,
+    );
+
+    await controller.sendMessage('actualiza gaseosas');
+
+    expect(
+      controller.state.messages.last.text,
+      contains('¿Qué quieres actualizar'),
+    );
+  });
 }
 
 class _LlmmConError extends LlmService {

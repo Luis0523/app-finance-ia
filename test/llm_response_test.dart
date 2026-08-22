@@ -128,6 +128,69 @@ void main() {
     expect(response.datosConsulta!.monto, 500.5);
   });
 
+  test('parsea tipo_consulta ganancias', () {
+    const json = '''
+    {
+      "tipo_respuesta": "consulta_reporte",
+      "mensaje_para_usuario": "",
+      "datos_transaccion": null,
+      "datos_consulta": {
+        "tipo_consulta": "ganancias"
+      }
+    }
+    ''';
+
+    final response = LlmResponse.fromJson(json);
+
+    expect(response.datosConsulta!.tipoConsulta, 'ganancias');
+  });
+
+  test('parsea actualizar_producto y ajustar_inventario', () {
+    const json = '''
+    {
+      "tipo_respuesta": "consulta_reporte",
+      "mensaje_para_usuario": "",
+      "datos_transaccion": null,
+      "datos_consulta": {
+        "tipo_consulta": "actualizar_producto",
+        "producto": "Gaseosas",
+        "precio_venta": 5,
+        "precio_compra": 3,
+        "stock_minimo": 10
+      }
+    }
+    ''';
+
+    final response = LlmResponse.fromJson(json);
+
+    expect(response.datosConsulta!.tipoConsulta, 'actualizar_producto');
+    expect(response.datosConsulta!.producto, 'Gaseosas');
+    expect(response.datosConsulta!.precioVenta, 5);
+    expect(response.datosConsulta!.precioCompra, 3);
+    expect(response.datosConsulta!.stockMinimo, 10);
+  });
+
+  test('parsea cantidad objetivo en ajustar_inventario', () {
+    const json = '''
+    {
+      "tipo_respuesta": "consulta_reporte",
+      "mensaje_para_usuario": "",
+      "datos_transaccion": null,
+      "datos_consulta": {
+        "tipo_consulta": "ajustar_inventario",
+        "producto": "Gaseosas",
+        "cantidad_objetivo": 50
+      }
+    }
+    ''';
+
+    final response = LlmResponse.fromJson(json);
+
+    expect(response.datosConsulta!.tipoConsulta, 'ajustar_inventario');
+    expect(response.datosConsulta!.producto, 'Gaseosas');
+    expect(response.datosConsulta!.cantidadObjetivo, 50);
+  });
+
   test('monto numérico como string se convierte a double', () {
     const json = '''
     {
@@ -161,7 +224,10 @@ void main() {
         "confianza": 0.9,
         "descripcion_normalizada": "Compra de bananos",
         "cantidad": 340,
-        "precio_unitario": 10
+        "precio_unitario": 10,
+        "producto_sugerido": "Bananos",
+        "accion_inventario": "compra",
+        "confianza_inventario": 0.9
       }
     }
     ''';
@@ -175,6 +241,9 @@ void main() {
       response.datosTransaccion!.descripcionNormalizada,
       'Compra de bananos',
     );
+    expect(response.datosTransaccion!.productoSugerido, 'Bananos');
+    expect(response.datosTransaccion!.accionInventario, 'compra');
+    expect(response.datosTransaccion!.confianzaInventario, 0.9);
     expect(response.datosTransaccion!.tieneDesglose, isTrue);
   });
 }

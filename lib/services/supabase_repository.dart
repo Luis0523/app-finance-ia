@@ -4,6 +4,7 @@ import '../models/flujo_caja.dart';
 import '../models/listado_transaccion.dart';
 import '../models/producto_inventario.dart';
 import '../models/resumen_analisis.dart';
+import '../models/resumen_ganancias.dart';
 import '../models/totales_mes.dart';
 import '../models/ultima_transaccion.dart';
 
@@ -33,6 +34,7 @@ abstract class FinanzasRepository {
     required double confianza,
     double? cantidad,
     double? precioUnitario,
+    String? productoId,
   });
 
   Future<String> insertarConversacion({
@@ -59,7 +61,37 @@ abstract class FinanzasRepository {
 
   Future<List<FlujoDia>> flujoCaja();
 
+  Future<ResumenGanancias> obtenerResumenGanancias();
+
   Future<List<ProductoInventario>> inventario();
+
+  Future<String?> buscarOCrearProducto({
+    required String nombre,
+    double? precioCompra,
+    double? precioVenta,
+    String unidadMedida = 'unidad',
+    String tipoProducto = 'reventa',
+  });
+
+  Future<String?> registrarCompra({
+    required String productoId,
+    required double cantidad,
+    required double costoUnitario,
+    String? proveedor,
+    String? transaccionId,
+  });
+
+  Future<bool> actualizarProducto({
+    required String nombre,
+    double? precioVenta,
+    double? precioCompra,
+    double? stockMinimo,
+  });
+
+  Future<bool> ajustarInventario({
+    required String nombre,
+    required double cantidadObjetivo,
+  });
 }
 
 class SupabaseRepository implements FinanzasRepository {
@@ -117,7 +149,9 @@ class SupabaseRepository implements FinanzasRepository {
         .eq('nombre', categoriaNivel1)
         .limit(1);
     if (padres.isEmpty) {
-      throw PersistException('Categoría nivel 1 no encontrada: $categoriaNivel1');
+      throw PersistException(
+        'Categoría nivel 1 no encontrada: $categoriaNivel1',
+      );
     }
     final padreId = padres.first['id'] as String;
 
@@ -167,6 +201,7 @@ class SupabaseRepository implements FinanzasRepository {
     required double confianza,
     double? cantidad,
     double? precioUnitario,
+    String? productoId,
   }) async {
     await _asegurarDatosPrueba();
     final negocioId = _negocioId!;
@@ -185,6 +220,7 @@ class SupabaseRepository implements FinanzasRepository {
           'confirmado_por_usuario': true,
           'cantidad': ?cantidad,
           'precio_unitario': ?precioUnitario,
+          'producto_id': ?productoId,
         })
         .select('id');
 
@@ -265,18 +301,18 @@ class SupabaseRepository implements FinanzasRepository {
     final row = _filaDe(rows);
     if (row == null) return ResumenAnalisis.vacio();
 
-    final porCategoria = (row['por_categoria'] as List<dynamic>? ?? [])
-        .map((item) {
-          final e = item as Map<String, dynamic>;
-          return ResumenCategoria(
-            categoriaNivel1: e['categoria_nivel1']?.toString() ?? '',
-            categoriaNivel2: e['categoria_nivel2']?.toString() ?? '',
-            tipo: e['tipo']?.toString() ?? '',
-            total: (e['total'] as num?)?.toDouble() ?? 0,
-            cantidad: (e['cantidad'] as num?)?.toInt() ?? 0,
-          );
-        })
-        .toList();
+    final porCategoria = (row['por_categoria'] as List<dynamic>? ?? []).map((
+      item,
+    ) {
+      final e = item as Map<String, dynamic>;
+      return ResumenCategoria(
+        categoriaNivel1: e['categoria_nivel1']?.toString() ?? '',
+        categoriaNivel2: e['categoria_nivel2']?.toString() ?? '',
+        tipo: e['tipo']?.toString() ?? '',
+        total: (e['total'] as num?)?.toDouble() ?? 0,
+        cantidad: (e['cantidad'] as num?)?.toInt() ?? 0,
+      );
+    }).toList();
 
     return ResumenAnalisis(
       ingresos: (row['ingresos'] as num?)?.toDouble() ?? 0,
@@ -294,10 +330,7 @@ class SupabaseRepository implements FinanzasRepository {
 
     final rows = await _client.rpc(
       'obtener_ultima_transaccion',
-      params: {
-        'p_negocio_id': negocioId,
-        'p_tipo': ?tipo,
-      },
+      params: {'p_negocio_id': negocioId, 'p_tipo': ?tipo},
     );
 
     final row = _filaDe(rows);
@@ -306,7 +339,8 @@ class SupabaseRepository implements FinanzasRepository {
     return UltimaTransaccion(
       monto: (row['monto'] as num?)?.toDouble() ?? 0,
       tipo: row['tipo']?.toString() ?? '',
-      fecha: DateTime.tryParse(row['fecha']?.toString() ?? '') ?? DateTime.now(),
+      fecha:
+          DateTime.tryParse(row['fecha']?.toString() ?? '') ?? DateTime.now(),
       descripcion: row['descripcion_normalizada']?.toString(),
       categoriaNivel1: row['categoria_nivel1']?.toString(),
       categoriaNivel2: row['categoria_nivel2']?.toString(),
@@ -341,11 +375,7 @@ class SupabaseRepository implements FinanzasRepository {
 
     final rows = await _client.rpc(
       'obtener_listado_transacciones',
-      params: {
-        'p_negocio_id': negocioId,
-        'p_tipo': ?tipo,
-        'p_limite': limite,
-      },
+      params: {'p_negocio_id': negocioId, 'p_tipo': ?tipo, 'p_limite': limite},
     );
 
     return _filasDe(rows).map((row) {
@@ -360,6 +390,9 @@ class SupabaseRepository implements FinanzasRepository {
         origen: row['origen']?.toString(),
         cantidad: (row['cantidad'] as num?)?.toDouble(),
         precioUnitario: (row['precio_unitario'] as num?)?.toDouble(),
+        costoUnitarioMomentoVenta: (row['costo_unitario_momento_venta'] as num?)
+            ?.toDouble(),
+        utilidad: (row['utilidad_calculada'] as num?)?.toDouble(),
       );
     }).toList();
   }
@@ -401,8 +434,138 @@ class SupabaseRepository implements FinanzasRepository {
         precioCompra: (row['precio_compra'] as num?)?.toDouble() ?? 0,
         precioVenta: (row['precio_venta'] as num?)?.toDouble() ?? 0,
         existencias: (row['existencias'] as num?)?.toDouble() ?? 0,
+        costoPromedio: (row['costo_promedio'] as num?)?.toDouble(),
+        utilidadUnitaria: (row['utilidad_unitaria'] as num?)?.toDouble(),
         valorTotal: (row['valor_total'] as num?)?.toDouble() ?? 0,
+        stockMinimo: (row['stock_minimo'] as num?)?.toDouble(),
+        estado: row['estado']?.toString(),
       );
     }).toList();
+  }
+
+  @override
+  Future<ResumenGanancias> obtenerResumenGanancias() async {
+    await _asegurarDatosPrueba();
+    final negocioId = _negocioId!;
+
+    final rows = await _client.rpc(
+      'obtener_resumen_ganancias',
+      params: {'p_negocio_id': negocioId},
+    );
+
+    final row = _filaDe(rows);
+    if (row == null) {
+      return const ResumenGanancias(
+        ingresos: 0,
+        costoVentas: 0,
+        utilidad: 0,
+        cantidadVentas: 0,
+        margen: 0,
+      );
+    }
+
+    return ResumenGanancias(
+      ingresos: (row['ingresos'] as num?)?.toDouble() ?? 0,
+      costoVentas: (row['costo_ventas'] as num?)?.toDouble() ?? 0,
+      utilidad: (row['utilidad'] as num?)?.toDouble() ?? 0,
+      cantidadVentas: (row['cantidad_ventas'] as num?)?.toInt() ?? 0,
+      margen: (row['margen'] as num?)?.toDouble() ?? 0,
+    );
+  }
+
+  @override
+  Future<String?> buscarOCrearProducto({
+    required String nombre,
+    double? precioCompra,
+    double? precioVenta,
+    String unidadMedida = 'unidad',
+    String tipoProducto = 'reventa',
+  }) async {
+    await _asegurarDatosPrueba();
+    final negocioId = _negocioId!;
+
+    final result = await _client.rpc(
+      'buscar_o_crear_producto',
+      params: {
+        'p_negocio_id': negocioId,
+        'p_nombre': nombre,
+        'p_precio_compra': ?precioCompra,
+        'p_precio_venta': ?precioVenta,
+        'p_unidad_medida': unidadMedida,
+        'p_tipo_producto': tipoProducto,
+      },
+    );
+
+    return result?.toString();
+  }
+
+  @override
+  Future<String?> registrarCompra({
+    required String productoId,
+    required double cantidad,
+    required double costoUnitario,
+    String? proveedor,
+    String? transaccionId,
+  }) async {
+    await _asegurarDatosPrueba();
+    final negocioId = _negocioId!;
+
+    final insertados = await _client
+        .from('compras')
+        .insert({
+          'negocio_id': negocioId,
+          'producto_id': productoId,
+          'cantidad': cantidad,
+          'costo_unitario': costoUnitario,
+          'proveedor': ?proveedor,
+          'transaccion_id': ?transaccionId,
+        })
+        .select('id');
+
+    return insertados.first['id'] as String;
+  }
+
+  @override
+  Future<bool> actualizarProducto({
+    required String nombre,
+    double? precioVenta,
+    double? precioCompra,
+    double? stockMinimo,
+  }) async {
+    await _asegurarDatosPrueba();
+    final negocioId = _negocioId!;
+
+    final result = await _client.rpc(
+      'actualizar_producto',
+      params: {
+        'p_negocio_id': negocioId,
+        'p_nombre': nombre,
+        'p_precio_venta': ?precioVenta,
+        'p_precio_compra': ?precioCompra,
+        'p_stock_minimo': ?stockMinimo,
+      },
+    );
+
+    return result == true;
+  }
+
+  @override
+  Future<bool> ajustarInventario({
+    required String nombre,
+    required double cantidadObjetivo,
+  }) async {
+    await _asegurarDatosPrueba();
+    final negocioId = _negocioId!;
+
+    final result = await _client.rpc(
+      'ajustar_inventario',
+      params: {
+        'p_negocio_id': negocioId,
+        'p_nombre': nombre,
+        'p_cantidad_objetivo': cantidadObjetivo,
+      },
+    );
+
+    return result == true;
   }
 }

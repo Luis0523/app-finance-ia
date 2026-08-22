@@ -8,7 +8,7 @@ La app ya cuenta con el flujo principal del prototipo: voz o texto, clasificaci�
 
 ## Fase actual
 
-Estamos en la **Fase 6b: detalle de transacciones, listados y configuración de LLM**.
+Estamos iniciando la **Fase 7: inventario normalizado**.
 
 Esta fase extiende la Fase 6 con mejoras de calidad sobre cómo se guardan y muestran los movimientos:
 
@@ -83,6 +83,37 @@ Esta fase extiende la Fase 6 con mejoras de calidad sobre cómo se guardan y mue
   - DeepSeek por defecto con `deepseek-chat`.
   - OpenAI como alternativa con `gpt-4o-mini`.
 
+### Fase 7: inventario con kardex, costo promedio y ganancia
+
+- La base de datos se reinició desde cero con `supabase/reset_desde_cero.sql` (borra todo y recrea esquema + seeds base). Se eliminaron los scripts SQL fragmentados anteriores.
+- Se aplica la lógica de negocio de `docs/logicanegocio.md`:
+  - `productos` como catálogo con `tipo_producto` (reventa/fabricado), `unidad_medida`, `stock_minimo`.
+  - `inventario` como única fuente de verdad de `existencia_actual` y `costo_promedio_actual`.
+  - `movimientos_inventario` (kardex) auditable con cantidad, costo unitario, existencia y costo resultantes.
+  - `compras`, `producciones` y `producto_costos` separadas.
+  - Triggers automáticos: compra/producción suman existencia y recalcular costo promedio ponderado (CPP); venta descuenta, congela `costo_unitario_momento_venta` y calcula `utilidad_calculada`.
+- `incremental_ganancias.sql` (sin reset): agrega ganancia/margen a inventario y listado, y el RPC `obtener_resumen_ganancias`.
+- `incremental_actualizar_producto.sql` (sin reset): agrega los RPC `actualizar_producto` y `ajustar_inventario`.
+
+#### Ganancia visible en la app
+
+- La columna `Ganancia` del inventario muestra la utilidad por unidad (precio de venta − costo promedio).
+- La columna `Ganancia` del listado muestra la utilidad de cada venta.
+- Consulta conversacional "¿cuánto gané este mes?" responde con ventas, costo de lo vendido, ganancia y margen.
+
+#### Comandos nuevos de inventario
+
+- `actualizar_producto`: "actualiza el precio de venta de gaseosas a 5", "configura stock mínimo de bananos en 10" (también precio de compra).
+- `ajustar_inventario`: "corrige el inventario de gaseosas a 50".
+- Fix: el título del inventario ahora muestra la cantidad real (`Inventario (2 productos)`), antes interpolaba mal la lista.
+
+#### Validaciones
+
+- `flutter analyze` sin errores.
+- `flutter test`: 56 pruebas pasando.
+- `flutter build apk --debug` correcto.
+- Los RPCs nuevos fueron probados contra Supabase real con la key de la app (actualizar producto y ajustar inventario responden `true`).
+
 ## Estado técnico actual
 
 - Rama de trabajo: `feature/fase-6-detalle-flujo-inventario`.
@@ -123,11 +154,31 @@ El archivo `.env` local no debe subirse al repositorio.
   - Resultado: transacción con `monto=3400`, `cantidad=340`, `precio_unitario=10`.
   - Descripción normalizada: `Compra de bananos`.
 
-## Siguiente fase
+## Fase 7 iniciada
 
-La siguiente fase debe ser la **Fase 7: inventario**.
+La siguiente fase es la **Fase 7: inventario**.
 
 Objetivo: convertir las compras y ventas detectadas por IA en movimientos de inventario útiles para el microempresario.
+
+Primer avance implementado:
+
+- `productos` queda como catálogo de productos.
+- `movimientos_inventario` registra entradas, salidas y ajustes.
+- Los movimientos pueden quedar vinculados a una `transaccion_id`.
+- `obtener_inventario` calcula existencias desde movimientos y conserva `productos.existencias` como stock inicial compatible con Fase 6.
+- El LLM puede sugerir `producto_sugerido`, `accion_inventario` y `confianza_inventario` cuando una transacción tiene producto y cantidad clara.
+- Al confirmar una transacción con producto/cantidad, la app registra el movimiento de inventario relacionado.
+- El listado de inventario muestra estado: `OK`, `Bajo` o `Agotado`.
+
+Segundo avance (lógica de negocio de docs/logicanegocio.md aplicada):
+
+- La base de datos se reinició desde cero con `supabase/reset_desde_cero.sql` (borra todo y recrea el esquema + seeds base: 8 categorías, negocio/usuario/cuenta de prueba).
+- Se separan los tres momentos del inventario: **compras** (entrada de lo comprado), **producciones** (entrada de lo fabricado con receta) y **ventas** (salida de lo que ya estaba en existencia).
+- `producto_costos` es solo la receta para calcular `costo_total_lote` de una producción; ya no se usa para calcular utilidad por venta.
+- Se usa **costo promedio ponderado (CPP)**: cada compra/producción recalcula el promedio; cada venta congela `costo_unitario_momento_venta` y calcula `utilidad_calculada` en la transacción.
+- `inventario` es la única fuente de verdad de `existencia_actual` y `costo_promedio_actual`; `movimientos_inventario` (kardex) registra cada movimiento con existencia/costo resultante para auditar.
+- Triggers automáticos: insert en `compras`/`producciones` actualiza el kardex; insert/update en `transacciones` tipo ingreso con `producto_id` descuenta inventario y calcula utilidad.
+- La app ahora: al confirmar una compra con producto, crea el producto y registra la compra (entrada por trigger); al confirmar una venta, crea el producto y registra la transacción con `producto_id` (el trigger descuenta y congela costo).
 
 Alcance propuesto:
 

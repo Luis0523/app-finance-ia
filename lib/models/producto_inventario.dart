@@ -5,6 +5,10 @@ class ProductoInventario {
     required this.precioVenta,
     required this.existencias,
     required this.valorTotal,
+    this.costoPromedio,
+    this.utilidadUnitaria,
+    this.stockMinimo,
+    this.estado,
   });
 
   final String nombre;
@@ -12,4 +16,8 @@ class ProductoInventario {
   final double precioVenta;
   final double existencias;
   final double valorTotal;
+  final double? costoPromedio;
+  final double? utilidadUnitaria;
+  final double? stockMinimo;
+  final String? estado;
 }

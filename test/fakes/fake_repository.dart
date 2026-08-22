@@ -2,12 +2,12 @@ import 'package:finanzas_ia/models/flujo_caja.dart';
 import 'package:finanzas_ia/models/listado_transaccion.dart';
 import 'package:finanzas_ia/models/producto_inventario.dart';
 import 'package:finanzas_ia/models/resumen_analisis.dart';
+import 'package:finanzas_ia/models/resumen_ganancias.dart';
 import 'package:finanzas_ia/models/totales_mes.dart';
 import 'package:finanzas_ia/models/ultima_transaccion.dart';
 import 'package:finanzas_ia/services/supabase_repository.dart';
 
 class FakeRepository implements FinanzasRepository {
-
   bool failOnPersist = false;
   Object? errorEnInsertar;
   int categoriaBusquedas = 0;
@@ -16,16 +16,32 @@ class FakeRepository implements FinanzasRepository {
   int conversacionesActualizadas = 0;
   int totalesConsultas = 0;
   int resumenConsultas = 0;
+  int gananciasConsultas = 0;
   int ultimaConsultas = 0;
   int listadoConsultas = 0;
   int flujoConsultas = 0;
   int inventarioConsultas = 0;
+  int productosCreados = 0;
+  int comprasRegistradas = 0;
+  int productosActualizados = 0;
+  int ajustesInventario = 0;
+  String? lastNombreActualizado;
+  double? lastPrecioVentaActualizado;
+  double? lastStockMinimoActualizado;
+  double? lastCantidadObjetivo;
+  bool actualizarProductoResult = true;
+  bool ajustarInventarioResult = true;
   String? lastCategoriaId;
   String? lastTransaccionId;
   String? lastConversacionId;
   String? ultimoTipoListado;
   String? lastDescripcionOriginal;
   String? lastDescripcionNormalizada;
+  String? lastProductoInventario;
+  double? lastCantidadInventario;
+  String? lastTransaccionInventarioId;
+  String? lastProductoId;
+  double? lastCostoUnitarioCompra;
   TotalesMes totalesMes = const TotalesMes(
     ingresos: 500,
     egresos: 300,
@@ -91,9 +107,20 @@ class FakeRepository implements FinanzasRepository {
       precioCompra: 80,
       precioVenta: 120,
       existencias: 10,
+      costoPromedio: 80,
+      utilidadUnitaria: 40,
       valorTotal: 800,
+      stockMinimo: 2,
+      estado: 'ok',
     ),
   ];
+  ResumenGanancias resumenGanancias = const ResumenGanancias(
+    ingresos: 1400,
+    costoVentas: 800,
+    utilidad: 600,
+    cantidadVentas: 3,
+    margen: 0.43,
+  );
 
   @override
   Future<String> buscarOCrearCategoriaNivel2({
@@ -117,6 +144,7 @@ class FakeRepository implements FinanzasRepository {
     required double confianza,
     double? cantidad,
     double? precioUnitario,
+    String? productoId,
   }) async {
     if (errorEnInsertar != null) throw errorEnInsertar!;
     if (failOnPersist) throw PersistException('error simulado de persistencia');
@@ -182,8 +210,69 @@ class FakeRepository implements FinanzasRepository {
   }
 
   @override
+  Future<ResumenGanancias> obtenerResumenGanancias() async {
+    gananciasConsultas++;
+    return resumenGanancias;
+  }
+
+  @override
   Future<List<ProductoInventario>> inventario() async {
     inventarioConsultas++;
     return productos;
+  }
+
+  @override
+  Future<String?> buscarOCrearProducto({
+    required String nombre,
+    double? precioCompra,
+    double? precioVenta,
+    String unidadMedida = 'unidad',
+    String tipoProducto = 'reventa',
+  }) async {
+    productosCreados++;
+    lastProductoInventario = nombre;
+    lastProductoId = 'producto-$productosCreados';
+    return lastProductoId;
+  }
+
+  @override
+  Future<String?> registrarCompra({
+    required String productoId,
+    required double cantidad,
+    required double costoUnitario,
+    String? proveedor,
+    String? transaccionId,
+  }) async {
+    comprasRegistradas++;
+    lastProductoId = productoId;
+    lastCantidadInventario = cantidad;
+    lastCostoUnitarioCompra = costoUnitario;
+    lastTransaccionInventarioId = transaccionId;
+    return 'compra-$comprasRegistradas';
+  }
+
+  @override
+  Future<bool> actualizarProducto({
+    required String nombre,
+    double? precioVenta,
+    double? precioCompra,
+    double? stockMinimo,
+  }) async {
+    productosActualizados++;
+    lastNombreActualizado = nombre;
+    lastPrecioVentaActualizado = precioVenta;
+    lastStockMinimoActualizado = stockMinimo;
+    return actualizarProductoResult;
+  }
+
+  @override
+  Future<bool> ajustarInventario({
+    required String nombre,
+    required double cantidadObjetivo,
+  }) async {
+    ajustesInventario++;
+    lastNombreActualizado = nombre;
+    lastCantidadObjetivo = cantidadObjetivo;
+    return ajustarInventarioResult;
   }
 }

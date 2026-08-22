@@ -28,6 +28,9 @@ class DatosTransaccion {
     this.descripcionNormalizada,
     this.cantidad,
     this.precioUnitario,
+    this.productoSugerido,
+    this.accionInventario,
+    this.confianzaInventario,
   });
 
   final double monto;
@@ -43,19 +46,31 @@ class DatosTransaccion {
   /// Costo/precio por unidad en quetzales (opcional).
   final double? precioUnitario;
 
+  /// Producto/artículo para afectar inventario (opcional).
+  final String? productoSugerido;
+
+  /// 'entrada' para compras, 'salida' para ventas, null si no aplica.
+  final String? accionInventario;
+
+  final double? confianzaInventario;
+
   bool get tieneDesglose => cantidad != null && precioUnitario != null;
 
   factory DatosTransaccion.fromMap(Map<String, dynamic> map) {
     return DatosTransaccion(
       monto: _asDouble(map['monto']),
       tipo: map['tipo']?.toString() ?? '',
-      categoriaNivel1Sugerida: map['categoria_nivel1_sugerida']?.toString() ?? '',
+      categoriaNivel1Sugerida:
+          map['categoria_nivel1_sugerida']?.toString() ?? '',
       categoriaNivel2Sugerida:
           map['categoria_nivel2_sugerida']?.toString() ?? '',
       confianza: _asDouble(map['confianza']),
       descripcionNormalizada: map['descripcion_normalizada']?.toString(),
       cantidad: _asDoubleOrNull(map['cantidad']),
       precioUnitario: _asDoubleOrNull(map['precio_unitario']),
+      productoSugerido: map['producto_sugerido']?.toString(),
+      accionInventario: map['accion_inventario']?.toString(),
+      confianzaInventario: _asDoubleOrNull(map['confianza_inventario']),
     );
   }
 
@@ -68,6 +83,9 @@ class DatosTransaccion {
     String? descripcionNormalizada,
     double? cantidad,
     double? precioUnitario,
+    String? productoSugerido,
+    String? accionInventario,
+    double? confianzaInventario,
   }) {
     return DatosTransaccion(
       monto: monto ?? this.monto,
@@ -81,6 +99,9 @@ class DatosTransaccion {
           descripcionNormalizada ?? this.descripcionNormalizada,
       cantidad: cantidad ?? this.cantidad,
       precioUnitario: precioUnitario ?? this.precioUnitario,
+      productoSugerido: productoSugerido ?? this.productoSugerido,
+      accionInventario: accionInventario ?? this.accionInventario,
+      confianzaInventario: confianzaInventario ?? this.confianzaInventario,
     );
   }
 
@@ -105,10 +126,16 @@ class DatosConsulta {
     this.periodo,
     this.categoriaNivel1,
     this.monto,
+    this.producto,
+    this.precioVenta,
+    this.precioCompra,
+    this.stockMinimo,
+    this.cantidadObjetivo,
   });
 
   /// 'totales' | 'ultima_transaccion' | 'analisis' | 'listado' |
-  /// 'flujo_caja' | 'viabilidad' | 'inventario' | null
+  /// 'flujo_caja' | 'viabilidad' | 'inventario' | 'ganancias' |
+  /// 'actualizar_producto' | 'ajustar_inventario' | null
   final String? tipoConsulta;
 
   /// 'ingresos' | 'egresos' | 'ambos' | null
@@ -126,14 +153,34 @@ class DatosConsulta {
   /// Monto planeado (para consultas de viabilidad de compra).
   final double? monto;
 
+  /// Nombre del producto (para actualizar producto o ajustar inventario).
+  final String? producto;
+
+  /// Nuevo precio de venta del producto.
+  final double? precioVenta;
+
+  /// Nuevo precio de compra del producto.
+  final double? precioCompra;
+
+  /// Nuevo stock mínimo del producto.
+  final double? stockMinimo;
+
+  /// Cantidad objetivo del producto (para ajuste de inventario).
+  final double? cantidadObjetivo;
+
   factory DatosConsulta.fromMap(Map<String, dynamic> map) => DatosConsulta(
-        tipoConsulta: map['tipo_consulta']?.toString(),
-        tipoReporte: map['tipo_reporte']?.toString(),
-        tipo: map['tipo']?.toString(),
-        periodo: map['periodo']?.toString(),
-        categoriaNivel1: map['categoria_nivel1']?.toString(),
-        monto: _asDouble(map['monto']),
-      );
+    tipoConsulta: map['tipo_consulta']?.toString(),
+    tipoReporte: map['tipo_reporte']?.toString(),
+    tipo: map['tipo']?.toString(),
+    periodo: map['periodo']?.toString(),
+    categoriaNivel1: map['categoria_nivel1']?.toString(),
+    monto: _asDouble(map['monto']),
+    producto: map['producto']?.toString(),
+    precioVenta: _asDouble(map['precio_venta']),
+    precioCompra: _asDouble(map['precio_compra']),
+    stockMinimo: _asDouble(map['stock_minimo']),
+    cantidadObjetivo: _asDouble(map['cantidad_objetivo']),
+  );
 
   static double? _asDouble(dynamic value) {
     if (value == null) return null;
@@ -158,7 +205,9 @@ class LlmResponse {
   factory LlmResponse.fromJson(String json) {
     final map = jsonDecode(json) as Map<String, dynamic>;
     return LlmResponse(
-      tipoRespuesta: TipoRespuesta.fromString(map['tipo_respuesta']?.toString()),
+      tipoRespuesta: TipoRespuesta.fromString(
+        map['tipo_respuesta']?.toString(),
+      ),
       mensajeParaUsuario: map['mensaje_para_usuario']?.toString() ?? '',
       datosTransaccion: map['datos_transaccion'] == null
           ? null

@@ -47,7 +47,7 @@ Ingresos, Costos de venta, Gastos operativos, Gastos administrativos, Otros gast
 | **Fase 5** | Consultas específicas (última transacción) y análisis con IA sobre agregados por categoría | ✅ |
 | **Fase 6** | Listado/tabla de ingresos y egresos, flujo de caja, inventario y análisis de viabilidad de compra | ✅ |
 | **Fase 6b** | Desglose cantidad × precio unitario, descripción normalizada, selector DeepSeek/OpenAI y listados refinados | ✅ |
-| **Fase 7** | Inventario con productos, entradas/salidas y stock conversacional | Siguiente |
+| **Fase 7** | Inventario con kardex, costo promedio ponderado, compras/producciones/ventas y stock conversacional | En curso |
 
 ### Criterios de aceptación por fase
 
@@ -92,7 +92,7 @@ Ingresos, Costos de venta, Gastos operativos, Gastos administrativos, Otros gast
    OPENAI_MODEL=gpt-4o-mini
    ```
 
-3. Ejecutar el script `supabase/schema.sql` en el SQL Editor de Supabase.
+3. Ejecutar el script `supabase/reset_desde_cero.sql` en el SQL Editor de Supabase. Este script **borra todo** y recrea el esquema desde cero aplicando la lógica de negocio de inventario (kardex + costo promedio ponderado), RLS y los seeds base.
 
 ### Ejecutar
 
@@ -135,9 +135,19 @@ docs/
 
 - **`negocios`**, **`usuarios`**, **`cuentas_dinero`** — contexto del negocio.
 - **`categorias`** — jerárquica de 2 niveles (nivel 1 global, nivel 2 por negocio), con trigger que valida consistencia de tipo padre/hijo.
-- **`transacciones`** — tabla central con discriminador `tipo` (ingreso/egreso) y vistas `vista_ingresos` / `vista_egresos` para consultar por separado sin duplicar datos.
+- **`productos`** — catálogo con `tipo_producto` (reventa/fabricado), `unidad_medida` y `precio_venta`.
+- **`inventario`** — foto actual por producto: `existencia_actual`, `costo_promedio_actual` y `valor_inventario` (generado). Única fuente de verdad de "cuánto tengo y a qué costo".
+- **`movimientos_inventario`** — **kardex** auditable: cada entrada/salida con `cantidad`, `costo_unitario`, `existencia_resultante` y `costo_promedio_resultante`.
+- **`compras`** — entrada de inventario comprado a proveedor (dispara el kardex con CPP).
+- **`producciones`** — entrada de inventario fabricado con receta (costo = `costo_total_lote / cantidad_producida`).
+- **`producto_costos`** — receta de insumos; solo se usa para calcular el costo de un lote producido.
+- **`transacciones`** — tabla financiera central; en ventas se **congela** `costo_unitario_momento_venta` y se calcula `utilidad_calculada` vía trigger.
 - **`prestamos`**, **`inversiones`** — tablas propias con datos específicos.
 - **`conversaciones`** — log de cada interacción (para métricas de precisión de la tesis).
+
+### Costeo de inventario
+
+Se usa **costo promedio ponderado (CPP)**. Cada compra o producción recalcula el promedio; cada venta usa el promedio vigente y lo congela en la transacción para que reportes pasados no cambien.
 
 ---
 

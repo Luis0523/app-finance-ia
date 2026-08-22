@@ -9,6 +9,8 @@ class ListadoTransaccion {
     this.origen,
     this.cantidad,
     this.precioUnitario,
+    this.costoUnitarioMomentoVenta,
+    this.utilidad,
   });
 
   final DateTime fecha;
@@ -20,6 +22,8 @@ class ListadoTransaccion {
   final String? origen;
   final double? cantidad;
   final double? precioUnitario;
+  final double? costoUnitarioMomentoVenta;
+  final double? utilidad;
 
   String get categoria {
     final nivel2 = categoriaNivel2?.trim();
