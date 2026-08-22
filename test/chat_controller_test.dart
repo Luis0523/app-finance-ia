@@ -4,6 +4,8 @@ import 'package:finanzas_ia/models/llm_response.dart';
 import 'package:finanzas_ia/providers/chat_provider.dart';
 import 'package:finanzas_ia/services/llm_service.dart';
 
+import 'fakes/fake_repository.dart';
+
 class _FakeLlmService extends LlmService {
   _FakeLlmService(this.responses);
 
@@ -45,7 +47,7 @@ LlmResponse _conversacion() {
 
 void main() {
   test('mensaje transaccional muestra tarjeta pendiente y no burbuja', () async {
-    final controller = ChatController(_FakeLlmService([_transaccion()]));
+    final controller = ChatController(_FakeLlmService([_transaccion()]), FakeRepository());
 
     await controller.sendMessage('vendí Q200 de fruta hoy');
 
@@ -53,11 +55,23 @@ void main() {
     expect(controller.state.messages.first.isUser, isTrue);
     expect(controller.state.pendingTransaction, isNotNull);
     expect(controller.state.pendingTransaction!.datos.monto, 200);
+    expect(controller.state.pendingTransaction!.origen, 'texto');
     expect(controller.state.isSending, isFalse);
   });
 
-  test('mensaje conversacional agrega burbuja de asistente', () async {
-    final controller = ChatController(_FakeLlmService([_conversacion()]));
+  test('mensaje transaccional registra la conversación al enviar', () async {
+    final repo = FakeRepository();
+    final controller = ChatController(_FakeLlmService([_transaccion()]), repo);
+
+    await controller.sendMessage('vendí Q200 de fruta hoy');
+
+    expect(repo.conversaciones, 1);
+    expect(controller.state.pendingTransaction!.conversacionId, repo.lastConversacionId);
+  });
+
+  test('mensaje conversacional agrega burbuja de asistente y log de conversación', () async {
+    final repo = FakeRepository();
+    final controller = ChatController(_FakeLlmService([_conversacion()]), repo);
 
     await controller.sendMessage('hola buenos días');
 
@@ -66,23 +80,31 @@ void main() {
     expect(controller.state.messages.last.text, 'Hola, ¿en qué te ayudo?');
     expect(controller.state.pendingTransaction, isNull);
     expect(controller.state.isSending, isFalse);
+    expect(repo.conversaciones, 1);
   });
 
-  test('confirmar transacción limpia la tarjeta y agrega confirmación', () async {
-    final controller = ChatController(_FakeLlmService([_transaccion()]));
+  test('confirmar transacción persiste y agrega confirmación', () async {
+    final repo = FakeRepository();
+    final controller = ChatController(_FakeLlmService([_transaccion()]), repo);
 
     await controller.sendMessage('vendí Q200 de fruta hoy');
-    controller.acceptPendingTransaction();
+    await controller.acceptPendingTransaction();
 
     expect(controller.state.pendingTransaction, isNull);
+    expect(repo.transacciones, 1);
+    expect(repo.conversacionesActualizadas, 1);
+    expect(repo.lastTransaccionId, isNotNull);
     expect(controller.state.messages.length, 2);
     expect(controller.state.messages.last.isUser, isFalse);
-    expect(controller.state.messages.last.text, '✓ Registrado: Ingreso de Q200.00 en Ingresos › Venta de producto.');
+    expect(
+      controller.state.messages.last.text,
+      '✓ Registrado: Ingreso de Q200.00 en Ingresos › Venta de producto.',
+    );
     expect(controller.state.messages.last.tipoMovimiento, 'ingreso');
   });
 
   test('corregir transacción actualiza los datos de la tarjeta', () async {
-    final controller = ChatController(_FakeLlmService([_transaccion()]));
+    final controller = ChatController(_FakeLlmService([_transaccion()]), FakeRepository());
 
     await controller.sendMessage('vendí Q200 de fruta hoy');
     controller.updatePendingTransaction(
@@ -100,7 +122,7 @@ void main() {
   });
 
   test('corregir y confirmar usa los datos corregidos en el feedback', () async {
-    final controller = ChatController(_FakeLlmService([_transaccion()]));
+    final controller = ChatController(_FakeLlmService([_transaccion()]), FakeRepository());
 
     await controller.sendMessage('vendí Q200 de fruta hoy');
     controller.updatePendingTransaction(
@@ -109,20 +131,43 @@ void main() {
       categoriaNivel1: 'Costos de venta',
       categoriaNivel2: 'Mercadería',
     );
-    controller.acceptPendingTransaction();
+    await controller.acceptPendingTransaction();
 
     final feedback = controller.state.messages.last;
     expect(feedback.text, '✓ Registrado: Egreso de Q250.00 en Costos de venta › Mercadería.');
     expect(feedback.tipoMovimiento, 'egreso');
   });
 
+  test('origen voz se conserva en la tarjeta', () async {
+    final controller = ChatController(_FakeLlmService([_transaccion()]), FakeRepository());
+
+    controller.setInputFromSpeech('vendí Q200 de fruta hoy');
+    await controller.sendMessage('vendí Q200 de fruta hoy');
+
+    expect(controller.state.pendingTransaction!.origen, 'voz');
+  });
+
   test('error del LLM produce burbuja de error sin tarjeta', () async {
-    final controller = ChatController(_FakeLlmService([]));
+    final repo = FakeRepository();
+    final controller = ChatController(_FakeLlmService([]), repo);
 
     await controller.sendMessage('hola');
 
     expect(controller.state.pendingTransaction, isNull);
     expect(controller.state.messages.last.isUser, isFalse);
     expect(controller.state.messages.last.text, contains('error'));
+    expect(repo.conversaciones, 0);
+  });
+
+  test('error de persistencia restaura la tarjeta', () async {
+    final repo = FakeRepository()..failOnPersist = true;
+    final controller = ChatController(_FakeLlmService([_transaccion()]), repo);
+
+    await controller.sendMessage('vendí Q200 de fruta hoy');
+    await controller.acceptPendingTransaction();
+
+    expect(controller.state.pendingTransaction, isNotNull);
+    expect(controller.state.isSaving, isFalse);
+    expect(controller.state.messages.last.text, contains('No se pudo guardar'));
   });
 }

@@ -79,14 +79,14 @@ class SpeechRecognitionController
       transcribedText: '',
       errorMessage: null,
     );
-    _chat.setInputText('');
+    _chat.setInputFromSpeech('');
 
     await _service.startListening(
       localeId: state.localeId ?? 'es_ES',
       onResult: (result) {
         final text = result.recognizedWords;
         state = state.copyWith(transcribedText: text);
-        _chat.setInputText(text);
+        _chat.setInputFromSpeech(text);
       },
     );
   }

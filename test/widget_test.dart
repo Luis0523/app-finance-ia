@@ -6,10 +6,13 @@ import 'package:finanzas_ia/main.dart';
 import 'package:finanzas_ia/models/llm_response.dart';
 import 'package:finanzas_ia/providers/chat_provider.dart';
 import 'package:finanzas_ia/providers/speech_provider.dart';
+import 'package:finanzas_ia/providers/supabase_provider.dart';
 import 'package:finanzas_ia/screens/chat_screen.dart';
 import 'package:finanzas_ia/services/llm_service.dart';
 import 'package:finanzas_ia/services/speech_service.dart';
 import 'package:speech_to_text/speech_to_text.dart';
+
+import 'fakes/fake_repository.dart';
 
 class _FakeSpeechService extends SpeechService {
   _FakeSpeechService();
@@ -44,6 +47,7 @@ void main() {
         overrides: [
           speechServiceProvider.overrideWithValue(_FakeSpeechService()),
           llmServiceProvider.overrideWithValue(_FakeLlmService()),
+          supabaseRepositoryProvider.overrideWithValue(FakeRepository()),
         ],
         child: const FinanzasApp(),
       ),

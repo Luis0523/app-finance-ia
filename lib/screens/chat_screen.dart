@@ -245,6 +245,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           if (chat.pendingTransaction != null)
             _TransactionCard(
               pending: chat.pendingTransaction!,
+              isSaving: chat.isSaving,
               onConfirm: _onConfirmPending,
               onCorrect: _onCorrectPending,
             ),
@@ -490,11 +491,13 @@ class _TypingIndicator extends StatelessWidget {
 class _TransactionCard extends StatelessWidget {
   const _TransactionCard({
     required this.pending,
+    required this.isSaving,
     required this.onConfirm,
     required this.onCorrect,
   });
 
   final PendingTransaction pending;
+  final bool isSaving;
   final VoidCallback onConfirm;
   final VoidCallback onCorrect;
 
@@ -550,16 +553,22 @@ class _TransactionCard extends StatelessWidget {
             Row(
               children: [
                 OutlinedButton.icon(
-                  onPressed: onCorrect,
+                  onPressed: isSaving ? null : onCorrect,
                   icon: const Icon(Icons.edit),
                   label: const Text('Corregir'),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: onConfirm,
-                    icon: const Icon(Icons.check),
-                    label: const Text('Confirmar'),
+                    onPressed: isSaving ? null : onConfirm,
+                    icon: isSaving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.check),
+                    label: Text(isSaving ? 'Guardando...' : 'Confirmar'),
                   ),
                 ),
               ],
