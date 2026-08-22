@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 import '../services/speech_service.dart';
 import 'chat_provider.dart';
@@ -50,7 +51,14 @@ class SpeechRecognitionController
   Future<void> initialize() async {
     if (state.isInitialized) return;
 
-    final ok = await _service.initialize();
+    final ok = await _service.initialize(onStatus: (status) {
+      if (status == SpeechToText.doneStatus) {
+        _service.stopListening();
+        state = state.copyWith(isListening: false);
+      } else if (status == SpeechToText.notListeningStatus) {
+        state = state.copyWith(isListening: false);
+      }
+    });
     if (!ok) {
       state = state.copyWith(
         errorMessage: 'No se pudo inicializar el reconocimiento de voz.',
@@ -71,14 +79,14 @@ class SpeechRecognitionController
       transcribedText: '',
       errorMessage: null,
     );
-    _chat.setInputText('');
+    _chat.setInputFromSpeech('');
 
     await _service.startListening(
       localeId: state.localeId ?? 'es_ES',
       onResult: (result) {
         final text = result.recognizedWords;
         state = state.copyWith(transcribedText: text);
-        _chat.setInputText(text);
+        _chat.setInputFromSpeech(text);
       },
     );
   }

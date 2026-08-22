@@ -3,9 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:finanzas_ia/main.dart';
+import 'package:finanzas_ia/models/chat_message.dart';
+import 'package:finanzas_ia/models/llm_response.dart';
+import 'package:finanzas_ia/providers/chat_provider.dart';
 import 'package:finanzas_ia/providers/speech_provider.dart';
+import 'package:finanzas_ia/providers/supabase_provider.dart';
 import 'package:finanzas_ia/screens/chat_screen.dart';
+import 'package:finanzas_ia/services/llm_service.dart';
 import 'package:finanzas_ia/services/speech_service.dart';
+import 'package:speech_to_text/speech_to_text.dart';
+
+import 'fakes/fake_repository.dart';
 
 class _FakeSpeechService extends SpeechService {
   _FakeSpeechService();
@@ -14,10 +22,26 @@ class _FakeSpeechService extends SpeechService {
   bool get isInitialized => true;
 
   @override
-  Future<bool> initialize() async => true;
+  Future<bool> initialize({SpeechStatusListener? onStatus}) async => true;
 
   @override
   Future<String> resolveSpanishLocale() async => 'es_ES';
+}
+
+class _FakeLlmService extends LlmService {
+  _FakeLlmService();
+
+  @override
+  Future<LlmResponse> classify({
+    required String text,
+    List<ChatMessage> historial = const [],
+  }) async {
+    return const LlmResponse(
+      tipoRespuesta: TipoRespuesta.conversacion,
+      mensajeParaUsuario: 'Entendido, ¿quieres registrar algo más?',
+      datosTransaccion: null,
+    );
+  }
 }
 
 void main() {
@@ -26,6 +50,8 @@ void main() {
       ProviderScope(
         overrides: [
           speechServiceProvider.overrideWithValue(_FakeSpeechService()),
+          llmServiceProvider.overrideWithValue(_FakeLlmService()),
+          supabaseRepositoryProvider.overrideWithValue(FakeRepository()),
         ],
         child: const FinanzasApp(),
       ),
@@ -62,9 +88,10 @@ void main() {
     expect(sendButton.onPressed, isNotNull);
 
     await tester.tap(find.byIcon(Icons.send));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('vendí Q200 de fruta hoy'), findsOneWidget);
+    expect(find.text('Entendido, ¿quieres registrar algo más?'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
   });
 }
