@@ -3,7 +3,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'screens/chat_screen.dart';
+import 'screens/main_shell.dart';
+import 'theme/lumina_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,11 +25,10 @@ class FinanzasApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Asistente Financiero',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-      ),
-      home: const ChatScreen(),
+      title: 'Lumina Finance',
+      debugShowCheckedModeBanner: false,
+      theme: luminaTheme(),
+      home: const MainShell(),
     );
   }
 }

@@ -7,6 +7,7 @@ import '../models/chat_message.dart';
 import '../models/tabla_datos.dart';
 import '../providers/chat_provider.dart';
 import '../providers/speech_provider.dart';
+import '../theme/lumina_theme.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -45,7 +46,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (!kIsWeb) {
       final status = await Permission.microphone.request();
       if (!status.isGranted) {
-        _showMessage('Se necesita el permiso del micrófono para transcribir tu voz.');
+        _showMessage(
+          'Se necesita el permiso del micrófono para transcribir tu voz.',
+        );
         return;
       }
     }
@@ -53,7 +56,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     try {
       await ref.read(speechControllerProvider.notifier).startListening();
     } catch (_) {
-      _showMessage('No se pudo iniciar el reconocimiento de voz en este dispositivo.');
+      _showMessage(
+        'No se pudo iniciar el reconocimiento de voz en este dispositivo.',
+      );
     }
   }
 
@@ -90,7 +95,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('Corregir transacción'),
+          title: const Text(
+            'Corregir transacción',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -129,7 +137,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: categoriaNivel1,
-                  decoration: const InputDecoration(labelText: 'Categoría nivel 1'),
+                  decoration: const InputDecoration(
+                    labelText: 'Categoría nivel 1',
+                  ),
                   items: _nivel1Categorias(),
                   onChanged: (value) {
                     if (value != null) {
@@ -204,7 +214,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     ref.listen<SpeechRecognitionState>(speechControllerProvider, (prev, next) {
-      if (next.errorMessage != null && next.errorMessage != prev?.errorMessage) {
+      if (next.errorMessage != null &&
+          next.errorMessage != prev?.errorMessage) {
         _showMessage(next.errorMessage!);
       }
     });
@@ -222,45 +233,94 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final chat = ref.watch(chatControllerProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Asistente financiero')),
-      body: Column(
-        children: [
-          if (speech.isListening) _ListeningBanner(localeId: speech.localeId),
-          Expanded(
-            child: chat.messages.isEmpty
-                ? const _EmptyChat()
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: chat.messages.length,
-                    itemBuilder: (context, index) {
-                      final message = chat.messages[index];
-                      if (message.tabla != null) {
-                        return _TablaCard(message: message);
-                      }
-                      if (message.reporte != null) {
-                        return _ReporteCard(message: message);
-                      }
-                      return _MessageBubble(message: message);
-                    },
-                  ),
-          ),
-          if (chat.isSending) const _TypingIndicator(),
-          if (chat.pendingTransaction != null)
-            _TransactionCard(
-              pending: chat.pendingTransaction!,
-              isSaving: chat.isSaving,
-              onConfirm: _onConfirmPending,
-              onCorrect: _onCorrectPending,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _ChatHeader(),
+            if (speech.isListening) _ListeningBanner(localeId: speech.localeId),
+            Expanded(
+              child: chat.messages.isEmpty
+                  ? const _EmptyChat()
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                      itemCount: chat.messages.length,
+                      itemBuilder: (context, index) {
+                        final message = chat.messages[index];
+                        if (message.tabla != null) {
+                          return _TablaCard(message: message);
+                        }
+                        if (message.reporte != null) {
+                          return _ReporteCard(message: message);
+                        }
+                        return _MessageBubble(message: message);
+                      },
+                    ),
             ),
-          _InputBar(
-            textController: _textController,
-            canSend: chat.canSend,
-            isListening: speech.isListening,
-            onMicPressed: _onMicPressed,
-            onSend: _onSend,
-            onChanged: (value) =>
-                ref.read(chatControllerProvider.notifier).setInputText(value),
+            if (chat.isSending) const _TypingIndicator(),
+            if (chat.pendingTransaction != null)
+              _TransactionCard(
+                pending: chat.pendingTransaction!,
+                isSaving: chat.isSaving,
+                onConfirm: _onConfirmPending,
+                onCorrect: _onCorrectPending,
+              ),
+            _InputBar(
+              textController: _textController,
+              canSend: chat.canSend,
+              isListening: speech.isListening,
+              onMicPressed: _onMicPressed,
+              onSend: _onSend,
+              onChanged: (value) =>
+                  ref.read(chatControllerProvider.notifier).setInputText(value),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatHeader extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      decoration: BoxDecoration(
+        color: LuminaColors.surface,
+        border: const Border(
+          bottom: BorderSide(color: LuminaColors.cardBorder),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: const BoxDecoration(
+              color: LuminaColors.primary,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.auto_awesome,
+              color: LuminaColors.onPrimary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Lumina',
+                style: Theme.of(context).textTheme.headlineMedium
+                    ?.copyWith(color: LuminaColors.primary),
+              ),
+              Text(
+                'Asistente financiero',
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+            ],
           ),
         ],
       ),
@@ -311,13 +371,33 @@ class _EmptyChat extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.mic_none, size: 64, color: theme.colorScheme.outline),
-            const SizedBox(height: 16),
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                color: LuminaColors.primary.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.auto_awesome,
+                size: 44,
+                color: LuminaColors.primary,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              '¡Hola! Cuéntame qué pasó hoy en tu negocio',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.headlineMedium,
+            ),
+            const SizedBox(height: 8),
             Text(
               'Pulsa el micrófono y di tu transacción, '
               'por ejemplo: "vendí Q200 de fruta hoy"',
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyLarge,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: LuminaColors.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -333,14 +413,13 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final isUser = message.isUser;
     final tipo = message.tipoMovimiento;
     final borderColor = tipo == 'ingreso'
-        ? Colors.green
+        ? LuminaColors.positive
         : tipo == 'egreso'
-            ? theme.colorScheme.error
-            : null;
+        ? LuminaColors.negative
+        : null;
 
     final contenido = borderColor != null
         ? Row(
@@ -365,14 +444,24 @@ class _MessageBubble extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: isUser
-            ? theme.colorScheme.primaryContainer
-            : theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
+            ? LuminaColors.surfaceContainerHigh
+            : LuminaColors.primary,
+        borderRadius: BorderRadius.only(
+          topLeft: const Radius.circular(16),
+          topRight: const Radius.circular(16),
+          bottomLeft: Radius.circular(isUser ? 16 : 4),
+          bottomRight: Radius.circular(isUser ? 4 : 16),
+        ),
         border: borderColor != null
             ? Border.all(color: borderColor, width: 1.5)
             : null,
       ),
-      child: contenido,
+      child: DefaultTextStyle(
+        style: TextStyle(
+          color: isUser ? LuminaColors.onSurface : LuminaColors.onPrimary,
+        ),
+        child: contenido,
+      ),
     );
 
     return Align(
@@ -401,29 +490,17 @@ class _InputBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          border: Border(
-            top: BorderSide(color: theme.colorScheme.outlineVariant),
-          ),
+          color: LuminaColors.surface,
+          border: const Border(top: BorderSide(color: LuminaColors.cardBorder)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            IconButton(
-              onPressed: onMicPressed,
-              tooltip: isListening ? 'Detener grabación' : 'Hablar',
-              icon: Icon(
-                isListening ? Icons.stop_circle : Icons.mic,
-                color: isListening ? theme.colorScheme.error : null,
-              ),
-            ),
             Expanded(
               child: TextField(
                 controller: textController,
@@ -434,20 +511,51 @@ class _InputBar extends StatelessWidget {
                 maxLines: 4,
                 decoration: InputDecoration(
                   hintText: 'Corrige o escribe tu transacción...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
+                  fillColor: LuminaColors.secondaryContainer.withValues(
+                    alpha: 0.3,
                   ),
+                  filled: true,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
-                    vertical: 10,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide.none,
                   ),
                 ),
               ),
             ),
-            IconButton(
-              onPressed: canSend ? onSend : null,
-              tooltip: 'Enviar',
-              icon: const Icon(Icons.send),
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: onMicPressed,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: isListening
+                      ? LuminaColors.error
+                      : LuminaColors.primary,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color:
+                          (isListening
+                                  ? LuminaColors.error
+                                  : LuminaColors.primary)
+                              .withValues(alpha: 0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  isListening ? Icons.stop : Icons.mic,
+                  color: LuminaColors.onPrimary,
+                  size: 26,
+                ),
+              ),
             ),
           ],
         ),
@@ -461,28 +569,45 @@ class _TypingIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: const BoxDecoration(
+              color: LuminaColors.primary,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(16),
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const SizedBox(
-                  width: 12,
-                  height: 12,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                const SizedBox(width: 8),
-                Text('Clasificando...', style: theme.textTheme.bodyMedium),
+                for (var i = 0; i < 3; i++)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.4, end: 1.0),
+                      duration: Duration(milliseconds: 400 + i * 150),
+                      curve: Curves.easeInOut,
+                      builder: (context, valor, _) => Opacity(
+                        opacity: valor,
+                        child: Container(
+                          width: 7,
+                          height: 7,
+                          decoration: const BoxDecoration(
+                            color: LuminaColors.onPrimary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -510,15 +635,21 @@ class _TransactionCard extends StatelessWidget {
     final theme = Theme.of(context);
     final d = pending.datos;
     final isIngreso = d.tipo == 'ingreso';
+    final accent = isIngreso ? LuminaColors.positive : LuminaColors.negative;
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: isIngreso ? Colors.green.shade200 : theme.colorScheme.error,
-        ),
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      decoration: BoxDecoration(
+        color: LuminaColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(LuminaRadii.card),
+        border: Border.all(color: accent.withValues(alpha: 0.4), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: LuminaColors.primary.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -527,11 +658,24 @@ class _TransactionCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(
-                  isIngreso ? Icons.trending_up : Icons.trending_down,
-                  color: isIngreso ? Colors.green : theme.colorScheme.error,
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: isIngreso
+                        ? LuminaColors.tertiaryContainer
+                        : LuminaColors.errorContainer.withValues(alpha: 0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isIngreso ? Icons.shopping_bag : Icons.shopping_cart,
+                    color: isIngreso
+                        ? LuminaColors.onTertiary
+                        : LuminaColors.onErrorContainer,
+                    size: 20,
+                  ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     pending.mensajeParaUsuario,
@@ -573,7 +717,7 @@ class _TransactionCard extends StatelessWidget {
               children: [
                 OutlinedButton.icon(
                   onPressed: isSaving ? null : onCorrect,
-                  icon: const Icon(Icons.edit),
+                  icon: const Icon(Icons.edit, size: 18),
                   label: const Text('Corregir'),
                 ),
                 const SizedBox(width: 8),
@@ -586,7 +730,7 @@ class _TransactionCard extends StatelessWidget {
                             height: 16,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.check),
+                        : const Icon(Icons.check, size: 18),
                     label: Text(isSaving ? 'Guardando...' : 'Confirmar'),
                   ),
                 ),
@@ -610,12 +754,19 @@ class _TablaCard extends StatelessWidget {
     final tabla = message.tabla!;
     final anchos = _anchosColumnas(tabla);
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: theme.colorScheme.outlineVariant),
+      decoration: BoxDecoration(
+        color: LuminaColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(LuminaRadii.card),
+        border: Border.all(color: LuminaColors.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: LuminaColors.primary.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -629,8 +780,9 @@ class _TablaCard extends StatelessWidget {
             ],
             Text(
               tabla.titulo,
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 8),
             SingleChildScrollView(
@@ -639,10 +791,21 @@ class _TablaCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _fila(tabla.headers, anchos, esEncabezado: true, theme: theme),
+                  _fila(
+                    tabla.headers,
+                    anchos,
+                    esEncabezado: true,
+                    theme: theme,
+                  ),
                   const SizedBox(height: 6),
                   for (var i = 0; i < tabla.rows.length; i++)
-                    _fila(tabla.rows[i], anchos, tabla: tabla, fila: i, theme: theme),
+                    _fila(
+                      tabla.rows[i],
+                      anchos,
+                      tabla: tabla,
+                      fila: i,
+                      theme: theme,
+                    ),
                 ],
               ),
             ),
@@ -691,23 +854,26 @@ class _TablaCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Text(
                 celdas[c],
-                style: (esEncabezado
-                        ? theme.textTheme.bodyMedium
-                            ?.copyWith(fontWeight: FontWeight.bold)
-                        : theme.textTheme.bodyMedium)
-                    ?.copyWith(
-                  color: (!esEncabezado &&
-                          tabla != null &&
-                          tabla.columnaColor == c &&
-                          tipo == 'ingreso')
-                      ? Colors.green.shade700
-                      : (!esEncabezado &&
-                              tabla != null &&
-                              tabla.columnaColor == c &&
-                              tipo == 'egreso')
-                          ? theme.colorScheme.error
-                          : null,
-                ),
+                style:
+                    (esEncabezado
+                            ? theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              )
+                            : theme.textTheme.bodyMedium)
+                        ?.copyWith(
+                          color:
+                              (!esEncabezado &&
+                                  tabla != null &&
+                                  tabla.columnaColor == c &&
+                                  tipo == 'ingreso')
+                              ? LuminaColors.positive
+                              : (!esEncabezado &&
+                                    tabla != null &&
+                                    tabla.columnaColor == c &&
+                                    tipo == 'egreso')
+                              ? LuminaColors.onErrorContainer
+                              : null,
+                        ),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -730,12 +896,12 @@ class _ReporteCard extends StatelessWidget {
 
     return Align(
       alignment: Alignment.centerLeft,
-      child: Card(
+      child: Container(
         margin: const EdgeInsets.only(bottom: 8),
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: theme.colorScheme.outlineVariant),
+        decoration: BoxDecoration(
+          color: LuminaColors.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(LuminaRadii.card),
+          border: Border.all(color: LuminaColors.outlineVariant),
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -749,24 +915,26 @@ class _ReporteCard extends StatelessWidget {
               _TotalRow(
                 label: 'Ingresos',
                 monto: totales.ingresos,
-                color: Colors.green,
+                color: LuminaColors.positive,
                 cantidad: totales.cantidadIngresos,
               ),
               const SizedBox(height: 8),
               _TotalRow(
                 label: 'Egresos',
                 monto: totales.egresos,
-                color: theme.colorScheme.error,
+                color: LuminaColors.negative,
                 cantidad: totales.cantidadEgresos,
               ),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
-                child: Divider(height: 1),
+                child: Divider(height: 1, color: LuminaColors.outlineVariant),
               ),
               _TotalRow(
                 label: 'Balance',
                 monto: totales.balance,
-                color: totales.balance >= 0 ? Colors.green : theme.colorScheme.error,
+                color: totales.balance >= 0
+                    ? LuminaColors.positive
+                    : LuminaColors.negative,
                 cantidad: null,
                 bold: true,
               ),
@@ -796,10 +964,9 @@ class _TotalRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final estilo = (bold
-            ? theme.textTheme.titleMedium
-            : theme.textTheme.bodyLarge)!
-        .copyWith(color: color, fontWeight: bold ? FontWeight.bold : null);
+    final estilo =
+        (bold ? theme.textTheme.titleMedium : theme.textTheme.bodyLarge)!
+            .copyWith(color: color, fontWeight: bold ? FontWeight.bold : null);
 
     return Row(
       children: [
@@ -821,11 +988,7 @@ class _TotalRow extends StatelessWidget {
 }
 
 class _DataRow extends StatelessWidget {
-  const _DataRow({
-    required this.label,
-    required this.value,
-    this.bold = false,
-  });
+  const _DataRow({required this.label, required this.value, this.bold = false});
 
   final String label;
   final String value;
