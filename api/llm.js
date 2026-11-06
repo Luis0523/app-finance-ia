@@ -36,8 +36,23 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const body =
-    typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {});
+  let payload;
+  try {
+    payload =
+      typeof req.body === 'string' ? JSON.parse(req.body) : req.body ?? {};
+  } catch {
+    res.status(400).json({ error: 'JSON inválido' });
+    return;
+  }
+
+  payload.model = process.env.LLM_MODEL || 'deepseek-chat';
+  if (
+    typeof payload.max_tokens !== 'number' ||
+    payload.max_tokens > 1200
+  ) {
+    payload.max_tokens = 1024;
+  }
+  const body = JSON.stringify(payload);
 
   try {
     const upstream = await fetch(`${LLM_BASE_URL}/chat/completions`, {
