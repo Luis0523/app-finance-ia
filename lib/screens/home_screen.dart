@@ -4,11 +4,16 @@ import 'package:intl/intl.dart';
 
 import '../models/flujo_caja.dart';
 import '../models/listado_transaccion.dart';
+import '../models/producto_inventario.dart';
+import '../models/sugerencia_pedido_proveedor.dart';
+import '../providers/auth_provider.dart';
 import '../providers/dashboard_provider.dart';
 import '../providers/negocio_provider.dart';
 import '../providers/supabase_provider.dart';
+import '../services/supabase_repository.dart';
 import '../theme/lumina_theme.dart';
 import 'charts_screen.dart';
+import 'cuaderno_fiados_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key, this.onOpenChat});
@@ -28,7 +33,7 @@ class HomeScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
           children: [
-            _Header(nombre: negocio.value ?? 'Mi negocio'),
+            _Header(nombre: negocio.valueOrNull ?? 'Mi negocio'),
             const SizedBox(height: 24),
             if (dashboard.isLoading)
               const Padding(
@@ -46,6 +51,14 @@ class HomeScreen extends ConsumerWidget {
               _BalanceCard(dashboard: dashboard.value!),
               const SizedBox(height: 12),
               _ResumenCards(dashboard: dashboard.value!),
+              _AlertaStockBajoCard(
+                productosBajos: dashboard.value!.inventario
+                    .where((p) => p.estado == 'bajo' || p.estado == 'agotado')
+                    .toList(),
+              ),
+              _AlertaProveedoresCard(repo: repo),
+              const SizedBox(height: 8),
+              const _AccesoCuadernoFiadosCard(),
               const SizedBox(height: 24),
               _ActividadHeader(
                 onVerGraficas: () {
@@ -73,25 +86,80 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-class _Header extends StatelessWidget {
+class _Header extends ConsumerWidget {
   const _Header({required this.nombre});
 
   final String nombre;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final email = ref.watch(usuarioActualProvider)?.email ?? '';
+    final inicial = nombre.trim().isEmpty
+        ? 'L'
+        : nombre.trim().substring(0, 1).toUpperCase();
+
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Hola, ¿cómo va tu negocio hoy?',
-          style: Theme.of(context).textTheme.headlineLarge,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Hola, ¿cómo va tu negocio hoy?',
+                style: Theme.of(context).textTheme.headlineLarge,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                nombre,
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: LuminaColors.onSurfaceVariant),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          nombre,
-          style: Theme.of(context).textTheme.bodyMedium
-              ?.copyWith(color: LuminaColors.onSurfaceVariant),
+        PopupMenuButton<String>(
+          tooltip: 'Cuenta',
+          offset: const Offset(0, 48),
+          onSelected: (valor) async {
+            if (valor == 'salir') {
+              await ref.read(authServiceProvider).cerrarSesion();
+            }
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem<String>(
+              enabled: false,
+              child: Text(email.isEmpty ? 'Mi cuenta' : email),
+            ),
+            const PopupMenuDivider(),
+            const PopupMenuItem<String>(
+              value: 'salir',
+              child: Row(
+                children: [
+                  Icon(Icons.logout, size: 18),
+                  SizedBox(width: 8),
+                  Text('Cerrar sesión'),
+                ],
+              ),
+            ),
+          ],
+          child: Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: LuminaColors.primaryContainer,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              inicial,
+              style: const TextStyle(
+                color: LuminaColors.onPrimary,
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+              ),
+            ),
+          ),
         ),
       ],
     );
@@ -507,6 +575,336 @@ class _EmptyCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _AlertaStockBajoCard extends StatelessWidget {
+  const _AlertaStockBajoCard({required this.productosBajos});
+
+  final List<ProductoInventario> productosBajos;
+
+  @override
+  Widget build(BuildContext context) {
+    if (productosBajos.isEmpty) return const SizedBox.shrink();
+
+    final nombres = productosBajos.map((p) => p.nombre).take(3).join(', ');
+    final resto =
+        productosBajos.length > 3 ? ' y ${productosBajos.length - 3} más' : '';
+
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(LuminaRadii.card),
+        border: Border.all(color: Colors.amber.shade300),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade100,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.amber.shade900,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${productosBajos.length} ${productosBajos.length == 1 ? "producto por agotarse" : "productos por agotarse"}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.amber.shade900,
+                    fontSize: 13,
+                  ),
+                ),
+                Text(
+                  '$nombres$resto',
+                  style: TextStyle(
+                    color: Colors.brown.shade800,
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AlertaProveedoresCard extends StatelessWidget {
+  const _AlertaProveedoresCard({required this.repo});
+  final FinanzasRepository repo;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<SugerenciaPedidoProveedor>>(
+      future: repo.obtenerSugerenciasPedidosProveedores(),
+      builder: (context, snapshot) {
+        final sugerencias = snapshot.data ?? [];
+        if (sugerencias.isEmpty) return const SizedBox.shrink();
+
+        final urgentes =
+            sugerencias.where((s) => s.esVisitaHoy || s.esVisitaManana).toList();
+        final primero = urgentes.isNotEmpty ? urgentes.first : sugerencias.first;
+
+        final aviso = primero.esVisitaHoy
+            ? '¡Visita HOY!'
+            : primero.esVisitaManana
+                ? 'Visita MAÑANA'
+                : 'Próxima visita';
+
+        return InkWell(
+          borderRadius: BorderRadius.circular(LuminaRadii.card),
+          onTap: () => _mostrarModalSugerencias(context, sugerencias),
+          child: Container(
+            margin: const EdgeInsets.only(top: 10),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: LuminaColors.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(LuminaRadii.card),
+              border: Border.all(
+                color: primero.esVisitaHoy
+                    ? Colors.red.shade300
+                    : LuminaColors.outlineVariant,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: LuminaColors.primary.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.local_shipping,
+                    color: LuminaColors.primary,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Pedidos a Proveedores ($aviso)',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            'Q${primero.costoTotalEstimado.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${primero.proveedor.nombre}: ${primero.totalArticulos} productos sugeridos. Toca para ver detalle.',
+                        style: TextStyle(
+                          color: LuminaColors.onSurfaceVariant,
+                          fontSize: 12,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right, size: 20, color: Colors.grey),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _mostrarModalSugerencias(
+    BuildContext context,
+    List<SugerenciaPedidoProveedor> sugerencias,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.local_shipping, color: LuminaColors.primary),
+                  const SizedBox(width: 8),
+                  Text('Sugerencias de Pedidos', style: LuminaTextStyles.titleMedium),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(ctx).height * 0.6,
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: sugerencias.length,
+                  itemBuilder: (ctx, i) {
+                    final sug = sugerencias[i];
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: LuminaColors.surfaceContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                sug.proveedor.nombre,
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                'Q${sug.costoTotalEstimado.toStringAsFixed(2)}',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            'Visita: ${sug.diaVisitaTexto}',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                          const Divider(height: 16),
+                          ...sug.productos.map(
+                            (item) => Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    '${item.producto.nombre} (Stock: ${item.existenciasActuales.toStringAsFixed(0)})',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  Text(
+                                    'Pedir ${item.cantidadSugerida.toStringAsFixed(0)} ${item.producto.unidadMedida}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: LuminaColors.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AccesoCuadernoFiadosCard extends StatelessWidget {
+  const _AccesoCuadernoFiadosCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(LuminaRadii.card),
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const CuadernoFiadosScreen()),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.amber.shade50.withValues(alpha: 0.8),
+          borderRadius: BorderRadius.circular(LuminaRadii.card),
+          border: Border.all(color: Colors.amber.shade300),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.menu_book,
+                color: Colors.amber.shade900,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Cuaderno de Fiados (Cuentas por Cobrar)',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Colors.amber.shade900,
+                    ),
+                  ),
+                  Text(
+                    'Gestiona las deudas de clientes, días de atraso y cobros',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.brown.shade800,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+          ],
+        ),
       ),
     );
   }

@@ -4,6 +4,7 @@ import '../theme/lumina_theme.dart';
 import 'chat_screen.dart';
 import 'historial_screen.dart';
 import 'home_screen.dart';
+import 'pos_screen.dart';
 import 'stock_screen.dart';
 
 class MainShell extends StatefulWidget {
@@ -23,10 +24,11 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final paginas = [
-      HomeScreen(onOpenChat: () => _irA(1)),
+      HomeScreen(onOpenChat: () => _irA(2)),
+      const PosScreen(),
       const ChatScreen(),
-      const HistorialScreen(),
       const StockScreen(),
+      const HistorialScreen(),
     ];
 
     return Scaffold(
@@ -54,6 +56,7 @@ class _BottomNav extends StatelessWidget {
         child: SizedBox(
           height: 72,
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _NavItem(
                 icono: Icons.dashboard_outlined,
@@ -62,38 +65,36 @@ class _BottomNav extends StatelessWidget {
                 activo: indice == 0,
                 onTap: () => onSelected(0),
               ),
-              const Expanded(child: SizedBox.shrink()),
-              GestureDetector(
+              _NavItem(
+                icono: Icons.point_of_sale_outlined,
+                iconoActivo: Icons.point_of_sale,
+                etiqueta: 'POS',
+                activo: indice == 1,
                 onTap: () => onSelected(1),
+              ),
+              GestureDetector(
+                onTap: () => onSelected(2),
                 child: Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  width: 60,
-                  height: 60,
+                  margin: const EdgeInsets.only(bottom: 6),
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
                     color: LuminaColors.primary,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
                         color: LuminaColors.primary.withValues(alpha: 0.35),
-                        blurRadius: 16,
-                        offset: const Offset(0, 6),
+                        blurRadius: 14,
+                        offset: const Offset(0, 5),
                       ),
                     ],
                   ),
                   child: const Icon(
                     Icons.auto_awesome,
                     color: LuminaColors.onPrimary,
-                    size: 28,
+                    size: 26,
                   ),
                 ),
-              ),
-              const Expanded(child: SizedBox.shrink()),
-              _NavItem(
-                icono: Icons.account_balance_wallet_outlined,
-                iconoActivo: Icons.account_balance_wallet,
-                etiqueta: 'Historial',
-                activo: indice == 2,
-                onTap: () => onSelected(2),
               ),
               _NavItem(
                 icono: Icons.inventory_2_outlined,
@@ -101,6 +102,13 @@ class _BottomNav extends StatelessWidget {
                 etiqueta: 'Stock',
                 activo: indice == 3,
                 onTap: () => onSelected(3),
+              ),
+              _NavItem(
+                icono: Icons.account_balance_wallet_outlined,
+                iconoActivo: Icons.account_balance_wallet,
+                etiqueta: 'Historial',
+                activo: indice == 4,
+                onTap: () => onSelected(4),
               ),
             ],
           ),

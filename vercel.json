@@ -1,0 +1,16 @@
+{
+  "buildCommand": "bash scripts/vercel-build.sh",
+  "installCommand": "echo 'Flutter se instala durante el build'",
+  "outputDirectory": "build/web",
+  "functions": {
+    "api/llm.js": {
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/llm/:path*",
+      "destination": "/api/llm"
+    }
+  ]
+}

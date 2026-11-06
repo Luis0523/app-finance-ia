@@ -1,22 +1,22 @@
 # Estado y Avances del Proyecto
 
-Fecha de actualización: 2026-08-22
+Fecha de actualización: 2026-09-02
 
 ## Resumen ejecutivo
 
-La app ya cuenta con el flujo principal del prototipo: voz o texto, clasificación con IA, confirmación de la transacción, persistencia en Supabase y consultas conversacionales sobre movimientos registrados. La fase actual está cerrando la parte de transacciones detalladas y reportes básicos antes de pasar a inventario.
+La app ya cuenta con el flujo principal del prototipo y con el diseño Lumina Finance: captura de transacciones, clasificación con IA, persistencia en Supabase, kardex auditable con Costo Promedio Ponderado (CPP), cálculo de utilidades y dashboard visual con gráficos e historial.
 
 ## Fase actual
 
-Estamos iniciando la **Fase 7: inventario normalizado**.
+Estamos en la **Fase 9: Módulo POS (Punto de Venta) y Escaneo Rápido de Barras**.
 
-Esta fase extiende la Fase 6 con mejoras de calidad sobre cómo se guardan y muestran los movimientos:
+Esta fase incorpora un sistema de cobro ágil en mostrador con escáner de cámara continuo o catálogo táctil rápido:
 
-- Registro de transacciones con desglose `cantidad × precio_unitario = monto`.
-- Confirmaciones conversacionales antes de guardar.
-- Descripción normalizada por IA separada del mensaje de conversación.
-- Listados con columnas claras: fecha, categoría real, descripción, cantidad, costo unitario y total.
-- Selector de proveedor LLM entre DeepSeek y OpenAI.
+- **Punto de Venta en Navbar:** Acceso prioritario en la barra de navegación (`Inicio` | `POS` | `Asistente` | `Stock` | `Historial`).
+- **Escaneo Continuo de Barras:** Lectura rápida sin cerrar la cámara, con alerta háptica y banner visual al registrar cada producto.
+- **Catálogo Táctil:** Cuadrícula con fotos y botón directo para agregar productos sin código de barras al ticket.
+- **Ticket y Calculadora de Cambio:** Desglose en tiempo real de artículos, cobro en efectivo con cálculo de vuelto y opciones de transferencia/tarjeta.
+- **Afectación Automática:** Descuento instantáneo de existencias en inventario y cálculo de utilidad real mediante el trigger contable existente.
 
 ## Avances completados
 

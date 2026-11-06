@@ -29,11 +29,15 @@ LlmConfig llmConfigFromEnv(Map<String, String> env) {
   );
 }
 
-LlmService llmServiceFromEnv(Map<String, String> env) {
+LlmService llmServiceFromEnv(
+  Map<String, String> env, {
+  String Function()? tokenProvider,
+}) {
   final config = llmConfigFromEnv(env);
   return LlmService(
     apiKey: config.apiKey,
     baseUrl: config.baseUrl,
     model: config.model,
+    tokenProvider: tokenProvider,
   );
 }

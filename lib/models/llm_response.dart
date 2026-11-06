@@ -131,11 +131,14 @@ class DatosConsulta {
     this.precioCompra,
     this.stockMinimo,
     this.cantidadObjetivo,
+    this.cliente,
+    this.descripcion,
   });
 
   /// 'totales' | 'ultima_transaccion' | 'analisis' | 'listado' |
   /// 'flujo_caja' | 'viabilidad' | 'inventario' | 'ganancias' |
-  /// 'actualizar_producto' | 'ajustar_inventario' | null
+  /// 'actualizar_producto' | 'ajustar_inventario' |
+  /// 'cuentas_por_cobrar' | 'registrar_fiado' | 'abonar_fiado' | 'pedidos_proveedor' | null
   final String? tipoConsulta;
 
   /// 'ingresos' | 'egresos' | 'ambos' | null
@@ -168,6 +171,12 @@ class DatosConsulta {
   /// Cantidad objetivo del producto (para ajuste de inventario).
   final double? cantidadObjetivo;
 
+  /// Cliente deudor o asociado (para cuentas por cobrar y abonos).
+  final String? cliente;
+
+  /// Detalle de la deuda o fiado.
+  final String? descripcion;
+
   factory DatosConsulta.fromMap(Map<String, dynamic> map) => DatosConsulta(
     tipoConsulta: map['tipo_consulta']?.toString(),
     tipoReporte: map['tipo_reporte']?.toString(),
@@ -180,6 +189,8 @@ class DatosConsulta {
     precioCompra: _asDouble(map['precio_compra']),
     stockMinimo: _asDouble(map['stock_minimo']),
     cantidadObjetivo: _asDouble(map['cantidad_objetivo']),
+    cliente: map['cliente']?.toString(),
+    descripcion: map['descripcion']?.toString(),
   );
 
   static double? _asDouble(dynamic value) {

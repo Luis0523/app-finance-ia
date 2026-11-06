@@ -1,8 +1,14 @@
+import 'package:finanzas_ia/models/abono_cuenta_cobrar.dart';
+import 'package:finanzas_ia/models/cuenta_por_cobrar.dart';
 import 'package:finanzas_ia/models/flujo_caja.dart';
+import 'package:finanzas_ia/models/item_venta_pos.dart';
 import 'package:finanzas_ia/models/listado_transaccion.dart';
+import 'package:finanzas_ia/models/movimiento_kardex.dart';
 import 'package:finanzas_ia/models/producto_inventario.dart';
+import 'package:finanzas_ia/models/proveedor.dart';
 import 'package:finanzas_ia/models/resumen_analisis.dart';
 import 'package:finanzas_ia/models/resumen_ganancias.dart';
+import 'package:finanzas_ia/models/sugerencia_pedido_proveedor.dart';
 import 'package:finanzas_ia/models/totales_mes.dart';
 import 'package:finanzas_ia/models/ultima_transaccion.dart';
 import 'package:finanzas_ia/services/supabase_repository.dart';
@@ -274,5 +280,215 @@ class FakeRepository implements FinanzasRepository {
     lastNombreActualizado = nombre;
     lastCantidadObjetivo = cantidadObjetivo;
     return ajustarInventarioResult;
+  }
+
+  List<Proveedor> listaProveedores = [];
+  List<MovimientoKardex> listaKardex = [];
+
+  @override
+  Future<bool> actualizarProductoPorId({
+    required String productoId,
+    String? nuevoNombre,
+    double? precioVenta,
+    double? precioCompra,
+    double? stockMinimo,
+    double? stockMaximo,
+    String? unidadMedida,
+    String? categoriaProducto,
+    String? codigoBarras,
+    String? imagenUrl,
+    String? proveedorId,
+  }) async {
+    productosActualizados++;
+    lastProductoId = productoId;
+    if (nuevoNombre != null) lastNombreActualizado = nuevoNombre;
+    if (precioVenta != null) lastPrecioVentaActualizado = precioVenta;
+    if (stockMinimo != null) lastStockMinimoActualizado = stockMinimo;
+    return actualizarProductoResult;
+  }
+
+  @override
+  Future<bool> ajustarInventarioConMotivo({
+    required String productoId,
+    required double cantidadObjetivo,
+    String motivo = 'Ajuste manual',
+  }) async {
+    ajustesInventario++;
+    lastProductoId = productoId;
+    lastCantidadObjetivo = cantidadObjetivo;
+    return ajustarInventarioResult;
+  }
+
+  @override
+  Future<List<Proveedor>> obtenerProveedores() async {
+    return listaProveedores;
+  }
+
+  @override
+  Future<Proveedor?> crearProveedor({
+    required String nombre,
+    String? contacto,
+    String? telefono,
+    String? direccion,
+    String? diasVisita,
+    String? notas,
+  }) async {
+    final p = Proveedor(
+      id: 'prov-${listaProveedores.length + 1}',
+      nombre: nombre,
+      contacto: contacto,
+      telefono: telefono,
+      direccion: direccion,
+      diasVisita: diasVisita,
+      notas: notas,
+    );
+    listaProveedores.add(p);
+    return p;
+  }
+
+  @override
+  Future<bool> actualizarProveedor(Proveedor proveedor) async {
+    final idx = listaProveedores.indexWhere((e) => e.id == proveedor.id);
+    if (idx != -1) {
+      listaProveedores[idx] = proveedor;
+      return true;
+    }
+    return false;
+  }
+
+  @override
+  Future<bool> eliminarProveedor(String id) async {
+    final idx = listaProveedores.indexWhere((e) => e.id == id);
+    if (idx != -1) {
+      listaProveedores.removeAt(idx);
+      return true;
+    }
+    return false;
+  }
+
+  @override
+  Future<List<MovimientoKardex>> obtenerKardexProducto({
+    required String productoId,
+    int limite = 30,
+  }) async {
+    return listaKardex;
+  }
+
+  @override
+  Future<String?> subirImagenProducto({
+    required List<int> bytes,
+    required String extension,
+  }) async {
+    return 'https://fake-storage.com/prod_123.$extension';
+  }
+
+  int ventasPosRegistradas = 0;
+  List<ItemVentaPos> ultimosItemsPos = [];
+  String? ultimoMetodoPagoPos;
+
+  @override
+  Future<bool> registrarVentaPos({
+    required List<ItemVentaPos> items,
+    required String metodoPago,
+    String? notas,
+  }) async {
+    ventasPosRegistradas++;
+    ultimosItemsPos = items;
+    ultimoMetodoPagoPos = metodoPago;
+    transacciones += items.length;
+    return true;
+  }
+
+  List<CuentaPorCobrar> cuentasPorCobrar = [];
+  List<AbonoCuentaCobrar> abonosRegistrados = [];
+  List<SugerenciaPedidoProveedor> sugerenciasPedidos = [];
+  int gastosManualesRegistrados = 0;
+
+  @override
+  Future<List<CuentaPorCobrar>> obtenerCuentasPorCobrar({String? estado}) async {
+    if (estado == null) return cuentasPorCobrar;
+    return cuentasPorCobrar.where((c) => c.estado == estado).toList();
+  }
+
+  @override
+  Future<CuentaPorCobrar?> registrarFiado({
+    required String clienteNombre,
+    required double monto,
+    String? descripcion,
+    String? clienteTelefono,
+    DateTime? fechaLimite,
+    String? transaccionId,
+  }) async {
+    final cuenta = CuentaPorCobrar(
+      id: 'cuenta-${cuentasPorCobrar.length + 1}',
+      clienteNombre: clienteNombre,
+      clienteTelefono: clienteTelefono,
+      montoTotal: monto,
+      saldoPendiente: monto,
+      descripcion: descripcion,
+      estado: 'pendiente',
+      fecha: DateTime.now(),
+      fechaLimite: fechaLimite,
+      transaccionId: transaccionId,
+      creadoEn: DateTime.now(),
+    );
+    cuentasPorCobrar.add(cuenta);
+    return cuenta;
+  }
+
+  @override
+  Future<bool> registrarAbonoFiado({
+    required String cuentaId,
+    required double monto,
+    String metodoPago = 'efectivo',
+    String? notas,
+  }) async {
+    final idx = cuentasPorCobrar.indexWhere((c) => c.id == cuentaId);
+    if (idx != -1) {
+      final actual = cuentasPorCobrar[idx];
+      final nuevoSaldo = (actual.saldoPendiente - monto) < 0 ? 0.0 : (actual.saldoPendiente - monto);
+      cuentasPorCobrar[idx] = CuentaPorCobrar(
+        id: actual.id,
+        clienteNombre: actual.clienteNombre,
+        clienteTelefono: actual.clienteTelefono,
+        montoTotal: actual.montoTotal,
+        saldoPendiente: nuevoSaldo,
+        descripcion: actual.descripcion,
+        estado: nuevoSaldo <= 0 ? 'pagado' : 'parcial',
+        fecha: actual.fecha,
+        fechaLimite: actual.fechaLimite,
+        transaccionId: actual.transaccionId,
+        creadoEn: actual.creadoEn,
+      );
+    }
+    abonosRegistrados.add(AbonoCuentaCobrar(
+      id: 'abono-${abonosRegistrados.length + 1}',
+      cuentaCobrarId: cuentaId,
+      monto: monto,
+      metodoPago: metodoPago,
+      fecha: DateTime.now(),
+      notas: notas,
+      creadoEn: DateTime.now(),
+    ));
+    transacciones++;
+    return true;
+  }
+
+  @override
+  Future<List<SugerenciaPedidoProveedor>> obtenerSugerenciasPedidosProveedores() async {
+    return sugerenciasPedidos;
+  }
+
+  @override
+  Future<String?> registrarGastoManual({
+    required double monto,
+    required String categoriaNivel1,
+    String? categoriaNivel2,
+    required String descripcion,
+    String? metodoPago,
+  }) async {
+    gastosManualesRegistrados++;
+    transacciones++;
+    return 'gasto-$gastosManualesRegistrados';
   }
 }

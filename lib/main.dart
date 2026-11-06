@@ -3,7 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'screens/main_shell.dart';
+import 'screens/auth/auth_gate.dart';
 import 'theme/lumina_theme.dart';
 
 Future<void> main() async {
@@ -25,10 +25,10 @@ class FinanzasApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Lumina Finance',
+      title: 'FIA - Finanzas IA',
       debugShowCheckedModeBanner: false,
       theme: luminaTheme(),
-      home: const MainShell(),
+      home: const AuthGate(),
     );
   }
 }

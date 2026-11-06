@@ -19,13 +19,16 @@ class LlmService {
     String apiKey = '',
     String baseUrl = 'https://api.deepseek.com',
     String model = 'deepseek-chat',
+    String Function()? tokenProvider,
   }) : _dio = dio ?? Dio(),
        // ignore: prefer_initializing_formals
        _apiKey = apiKey,
        // ignore: prefer_initializing_formals
        _baseUrl = baseUrl,
        // ignore: prefer_initializing_formals
-       _model = model {
+       _model = model,
+       // ignore: prefer_initializing_formals
+       _tokenProvider = tokenProvider {
     _dio.options.connectTimeout = const Duration(seconds: 20);
     _dio.options.receiveTimeout = const Duration(seconds: 45);
   }
@@ -34,6 +37,13 @@ class LlmService {
   final String _apiKey;
   final String _baseUrl;
   final String _model;
+  final String Function()? _tokenProvider;
+
+  String get _token {
+    final token = _tokenProvider?.call();
+    if (token != null && token.isNotEmpty) return token;
+    return _apiKey;
+  }
 
   String get apiKey => _apiKey;
   String get baseUrl => _baseUrl;
@@ -103,6 +113,18 @@ datos_consulta elige tipo_consulta:
 - "ajustar_inventario" cuando el usuario quiera corregir las existencias de un
   producto ("corrige el inventario de gaseosas a 50", "ahora hay 200 bananos",
   "pon las existencias de gaseosas en 30"). Llena "producto" y "cantidad_objetivo".
+- "cuentas_por_cobrar" cuando el usuario consulte sobre el cuaderno de fiados,
+  morosos o deudas de clientes ("¿quiénes me deben dinero y cuánto?", "¿cuánto me debe
+  Doña Carmen?", "muéstrame los fiados"). Llena "cliente" si pregunta por alguien específico.
+- "registrar_fiado" cuando el usuario quiera anotar o fiar algo a crédito a un
+  cliente ("Fíale a Doña Carmen Q65 de abarrotes", "Apunta un fiado de Q40 a Don Pedro por
+  aceites"). Llena "cliente", "monto" y "descripcion".
+- "abonar_fiado" cuando el cliente pague o abone a su cuenta de fiado ("Doña Carmen
+  me vino a pagar Q50", "Registra un abono de Q30 de Don Pedro", "Me pagó Q20 Don Mario").
+  Llena "cliente" y "monto".
+- "pedidos_proveedor" cuando el usuario pregunte qué comprar o pedir a los proveedores,
+  quién le visita hoy o sugerencias de surtido ("¿qué le tengo que pedir a los proveedores?",
+  "¿quién me visita hoy?", "sugerencias de compras a proveedores").
 
 Usa los mensajes anteriores de la conversación como contexto para interpretar el
 mensaje actual (por ejemplo, si el usuario dice "y esto" o "esa fruta", refiere a
@@ -170,6 +192,10 @@ algo ya mencionado).
                   'ganancias',
                   'actualizar_producto',
                   'ajustar_inventario',
+                  'cuentas_por_cobrar',
+                  'registrar_fiado',
+                  'abonar_fiado',
+                  'pedidos_proveedor',
                 ],
               },
               'tipo_reporte': {
@@ -204,6 +230,12 @@ algo ya mencionado).
               },
               'cantidad_objetivo': {
                 'type': ['number', 'null'],
+              },
+              'cliente': {
+                'type': ['string', 'null'],
+              },
+              'descripcion': {
+                'type': ['string', 'null'],
               },
             },
           },
@@ -248,7 +280,7 @@ algo ya mencionado).
           endpoint,
           options: Options(
             headers: {
-              'Authorization': 'Bearer $_apiKey',
+              'Authorization': 'Bearer $_token',
               'Content-Type': 'application/json',
             },
           ),
@@ -346,7 +378,7 @@ no estén en el resumen.
           endpoint,
           options: Options(
             headers: {
-              'Authorization': 'Bearer $_apiKey',
+              'Authorization': 'Bearer $_token',
               'Content-Type': 'application/json',
             },
           ),

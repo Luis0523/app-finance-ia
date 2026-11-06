@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FIA — Panel de Control Financiero</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar Navegación Lateral -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-badge">FIA</div>
+        <div class="brand-text">
+          <h2>FIA</h2>
+          <span class="badge-status">Finanzas & Control</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">NEGOCIOS ACTIVOS</div>
+        <div id="businessSelector" class="business-selector-list">
+          <!-- Renderizado dinámico desde JS con los negocios de Supabase -->
+          <div class="selector-skeleton">Cargando negocios...</div>
+        </div>
+
+        <div class="nav-section-label">MÓDULOS</div>
+        <ul class="nav-menu">
+          <li class="active" data-view="resumen">
+            <a href="#resumen"><span class="nav-icon">📊</span> Resumen General</a>
+          </li>
+          <li data-view="ventas">
+            <a href="#ventas"><span class="nav-icon">💵</span> Ventas y Cobros</a>
+          </li>
+          <li data-view="inventario">
+            <a href="#inventario"><span class="nav-icon">📦</span> Catálogo de Productos</a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="database-card">
+          <div class="db-indicator">
+            <span class="dot-pulse"></span>
+            <span id="dbInfoText">Supabase Conectado</span>
+          </div>
+          <small>Base de datos sincronizada</small>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Contenido Principal -->
+    <main class="main-content">
+      <!-- Topbar Header -->
+      <header class="topbar">
+        <div class="topbar-title">
+          <div class="business-pill" id="currentBusinessBadge">
+            <span class="pill-dot"></span>
+            <span id="currentBusinessName">Cargando datos...</span>
+          </div>
+          <p id="currentBusinessDescription">Registro y control de operaciones</p>
+        </div>
+
+        <div class="topbar-actions">
+          <div class="date-range-badge">
+            <span>Período: 31 Oct 2026 — 05 Nov 2026</span>
+          </div>
+          <button id="btnRefresh" class="btn-refresh" title="Actualizar datos desde la base de datos">
+            <span>Actualizar</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- KPI Summary Cards -->
+      <section class="kpi-grid">
+        <div class="kpi-card highlight-purple">
+          <div class="kpi-header">
+            <span class="kpi-title">Ingresos por Ventas</span>
+            <span class="kpi-icon-simple">Q</span>
+          </div>
+          <div class="kpi-value" id="kpiIngresos">Q 0.00</div>
+          <div class="kpi-footer">
+            <span class="trend-up" id="kpiVentasCount">0 ventas</span>
+            <span class="kpi-sub">en el período</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-title">Gastos del Negocio</span>
+            <span class="kpi-icon-simple">Q</span>
+          </div>
+          <div class="kpi-value" id="kpiEgresos">Q 0.00</div>
+          <div class="kpi-footer">
+            <span class="trend-neutral" id="kpiGastosCount">0 gastos</span>
+            <span class="kpi-sub">compras y suministros</span>
+          </div>
+        </div>
+
+        <div class="kpi-card highlight-green">
+          <div class="kpi-header">
+            <span class="kpi-title">Ganancia Neta</span>
+            <span class="kpi-icon-simple">%</span>
+          </div>
+          <div class="kpi-value" id="kpiGananciaNeta">Q 0.00</div>
+          <div class="kpi-footer">
+            <span class="trend-up" id="kpiMargen">0%</span>
+            <span class="kpi-sub">margen comercial</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-title">Venta Promedio</span>
+            <span class="kpi-icon-simple">Q</span>
+          </div>
+          <div class="kpi-value" id="kpiTicketPromedio">Q 0.00</div>
+          <div class="kpi-footer">
+            <span class="trend-neutral">Promedio</span>
+            <span class="kpi-sub">por cliente</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel de Gráficos -->
+      <section class="charts-grid">
+        <div class="chart-container large">
+          <div class="chart-header">
+            <div>
+              <h3>Ventas y Gastos por Día</h3>
+              <p>Historial diario del 31 de Octubre al 5 de Noviembre</p>
+            </div>
+            <div class="chart-legend-custom">
+              <span class="badge-legend badge-ingresos"><span class="dot"></span> Ventas</span>
+              <span class="badge-legend badge-egresos"><span class="dot"></span> Gastos</span>
+            </div>
+          </div>
+          <div class="canvas-wrapper">
+            <canvas id="flujoChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-container small">
+          <div class="chart-header">
+            <div>
+              <h3>Distribución de Ventas</h3>
+              <p>Por producto y artículo</p>
+            </div>
+          </div>
+          <div class="canvas-wrapper doughnut-wrapper">
+            <canvas id="categoriaChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tabla de Transacciones -->
+      <section class="data-section" id="ventas">
+        <div class="section-card">
+          <div class="card-header-flex">
+            <div>
+              <h3>Registro de Transacciones</h3>
+              <p>Historial detallado de cobros y pagos</p>
+            </div>
+            <div class="table-filters">
+              <button class="filter-btn active" data-filter="todos">Todos</button>
+              <button class="filter-btn" data-filter="ingreso">Ventas</button>
+              <button class="filter-btn" data-filter="egreso">Gastos</button>
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="custom-table" id="tablaTransacciones">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Tipo</th>
+                  <th>Descripción</th>
+                  <th>Registro</th>
+                  <th>Cant.</th>
+                  <th>Monto (Q)</th>
+                  <th>Ganancia Est.</th>
+                </tr>
+              </thead>
+              <tbody id="tablaBody">
+                <tr>
+                  <td colspan="7" class="loading-td">Cargando transacciones...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sección de Catálogo e Inventario -->
+      <section class="data-section" id="inventario">
+        <div class="section-card">
+          <div class="card-header-flex">
+            <div>
+              <h3>Catálogo de Productos</h3>
+              <p>Precios de compra, precio de venta al público y margen de ganancia</p>
+            </div>
+          </div>
+          <div class="product-cards-grid" id="catalogoGrid">
+            <!-- Rellenado dinámicamente -->
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="mock-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

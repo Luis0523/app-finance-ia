@@ -312,7 +312,7 @@ class _ChatHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Lumina',
+                'FIA',
                 style: Theme.of(context).textTheme.headlineMedium
                     ?.copyWith(color: LuminaColors.primary),
               ),

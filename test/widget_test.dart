@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:finanzas_ia/main.dart';
 import 'package:finanzas_ia/models/chat_message.dart';
 import 'package:finanzas_ia/models/llm_response.dart';
+import 'package:finanzas_ia/providers/auth_provider.dart';
 import 'package:finanzas_ia/providers/chat_provider.dart';
 import 'package:finanzas_ia/providers/negocio_provider.dart';
 import 'package:finanzas_ia/providers/speech_provider.dart';
@@ -58,6 +59,8 @@ void main() {
           negocioNombreProvider.overrideWith(
             (ref) async => 'Tienda de Doña María',
           ),
+          autenticadoProvider.overrideWithValue(true),
+          usuarioActualProvider.overrideWithValue(null),
         ],
         child: const FinanzasApp(),
       ),

@@ -66,6 +66,54 @@ class LuminaRadii {
   static const pill = 999.0;
 }
 
+class LuminaTextStyles {
+  LuminaTextStyles._();
+
+  static const titleLarge = TextStyle(
+    fontFamily: 'Inter',
+    fontSize: 18,
+    fontWeight: FontWeight.w600,
+    color: LuminaColors.onSurface,
+  );
+
+  static const titleMedium = TextStyle(
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    color: LuminaColors.onSurface,
+  );
+
+  static const bodyLarge = TextStyle(
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: FontWeight.w400,
+    height: 1.5,
+    color: LuminaColors.onSurface,
+  );
+
+  static const bodyMedium = TextStyle(
+    fontFamily: 'Inter',
+    fontSize: 14,
+    fontWeight: FontWeight.w400,
+    height: 1.4,
+    color: LuminaColors.onSurface,
+  );
+
+  static const bodySmall = TextStyle(
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: FontWeight.w400,
+    color: LuminaColors.onSurfaceVariant,
+  );
+
+  static const labelLarge = TextStyle(
+    fontFamily: 'Inter',
+    fontSize: 14,
+    fontWeight: FontWeight.w500,
+    color: LuminaColors.onSurface,
+  );
+}
+
 ThemeData luminaTheme() {
   const scheme = ColorScheme.light(
     primary: LuminaColors.primary,

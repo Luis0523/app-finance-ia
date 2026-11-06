@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/chat_message.dart';
@@ -280,6 +282,18 @@ class ChatController extends StateNotifier<ChatState> {
         break;
       case 'ajustar_inventario':
         await _manejarAjustarInventario(consulta!, mensajeDelLlm);
+        break;
+      case 'cuentas_por_cobrar':
+        await _manejarCuentasPorCobrar(consulta!, mensajeDelLlm);
+        break;
+      case 'registrar_fiado':
+        await _manejarRegistrarFiado(consulta!, mensajeDelLlm);
+        break;
+      case 'abonar_fiado':
+        await _manejarAbonarFiado(consulta!, mensajeDelLlm);
+        break;
+      case 'pedidos_proveedor':
+        await _manejarPedidosProveedor(mensajeDelLlm);
         break;
       case 'viabilidad':
         await _manejarViabilidad(consulta!);
@@ -600,6 +614,225 @@ class ChatController extends StateNotifier<ChatState> {
     }
   }
 
+  Future<void> _manejarCuentasPorCobrar(
+    DatosConsulta consulta,
+    String mensaje,
+  ) async {
+    try {
+      final fiados = await _repo.obtenerCuentasPorCobrar();
+      var pendientes = fiados.where((f) => !f.estaPagado).toList();
+
+      final filtroCliente = consulta.cliente?.trim().toLowerCase();
+      if (filtroCliente != null && filtroCliente.isNotEmpty) {
+        pendientes = pendientes
+            .where((f) => f.clienteNombre.toLowerCase().contains(filtroCliente))
+            .toList();
+      }
+
+      if (pendientes.isEmpty) {
+        _addAssistantMessage(
+          mensaje.isNotEmpty
+              ? mensaje
+              : (filtroCliente != null && filtroCliente.isNotEmpty)
+                  ? 'No encontré deudas pendientes para "$filtroCliente".'
+                  : '¡Al día! No tienes cuentas pendientes por cobrar en el Cuaderno de Fiados.',
+        );
+        return;
+      }
+
+      final totalPendiente = pendientes.fold<double>(
+        0,
+        (acc, f) => acc + f.saldoPendiente,
+      );
+
+      final tabla = TablaDatos(
+        titulo: 'Cuaderno de Fiados (${pendientes.length} cuentas pendientes)',
+        headers: const [
+          'Cliente',
+          'Monto',
+          'Saldo',
+          'Atraso',
+          'Fecha',
+          'Detalle',
+        ],
+        rows: pendientes
+            .map(
+              (f) => [
+                f.clienteNombre,
+                'Q${f.montoTotal.toStringAsFixed(2)}',
+                'Q${f.saldoPendiente.toStringAsFixed(2)}',
+                '${f.diasDeuda} d',
+                DateFormat('dd/MM').format(f.fecha),
+                f.descripcion ?? '—',
+              ],
+            )
+            .toList(),
+      );
+
+      final texto = mensaje.isEmpty
+          ? 'Total pendiente de cobro: Q${totalPendiente.toStringAsFixed(2)}.'
+          : '$mensaje Total pendiente: Q${totalPendiente.toStringAsFixed(2)}.';
+      _addTablaMessage(texto, tabla);
+    } on Exception catch (e) {
+      _addAssistantMessage('No se pudo consultar el cuaderno de fiados: $e');
+    }
+  }
+
+  Future<void> _manejarRegistrarFiado(
+    DatosConsulta consulta,
+    String mensaje,
+  ) async {
+    final cliente = consulta.cliente?.trim();
+    final monto = consulta.monto;
+
+    if (cliente == null || cliente.isEmpty) {
+      _addAssistantMessage(
+        '¿A qué cliente le vas a fiar? Por favor indícame su nombre.',
+      );
+      return;
+    }
+
+    if (monto == null || monto <= 0) {
+      _addAssistantMessage(
+        '¿De cuánto es el fiado para $cliente? Dime el monto en Quetzales.',
+      );
+      return;
+    }
+
+    try {
+      final fiado = await _repo.registrarFiado(
+        clienteNombre: cliente,
+        monto: monto,
+        descripcion: consulta.descripcion,
+      );
+
+      if (fiado == null) {
+        _addAssistantMessage('No se pudo registrar el fiado para $cliente.');
+        return;
+      }
+
+      _addAssistantMessage(
+        '${mensaje.isEmpty ? '' : '$mensaje\n\n'}'
+        '📖 **Anotado en el Cuaderno de Fiados:**\n'
+        '• **Cliente:** $cliente\n'
+        '• **Monto:** Q${monto.toStringAsFixed(2)}\n'
+        '• **Detalle:** ${consulta.descripcion ?? 'Mercadería variada'}\n'
+        '• **Estado:** Pendiente de cobro\n\n'
+        'Puedes consultar las deudas diciendo *"¿Quiénes me deben?"* o registrar un pago diciendo *"$cliente me pagó Q..."*.',
+      );
+    } on Exception catch (e) {
+      _addAssistantMessage('Error al anotar fiado: $e');
+    }
+  }
+
+  Future<void> _manejarAbonarFiado(
+    DatosConsulta consulta,
+    String mensaje,
+  ) async {
+    final cliente = consulta.cliente?.trim();
+    final monto = consulta.monto;
+
+    if (cliente == null || cliente.isEmpty) {
+      _addAssistantMessage(
+        '¿De qué cliente es el abono o pago? Dime su nombre.',
+      );
+      return;
+    }
+
+    if (monto == null || monto <= 0) {
+      _addAssistantMessage(
+        '¿Cuánto abonó $cliente? Dime el monto recibido.',
+      );
+      return;
+    }
+
+    try {
+      final fiados = await _repo.obtenerCuentasPorCobrar();
+      final pendientes = fiados
+          .where((f) =>
+              !f.estaPagado &&
+              f.clienteNombre.toLowerCase().contains(cliente.toLowerCase()))
+          .toList();
+
+      if (pendientes.isEmpty) {
+        _addAssistantMessage(
+          'No encontré ninguna cuenta pendiente a nombre de "$cliente" en el Cuaderno de Fiados.',
+        );
+        return;
+      }
+
+      final cuenta = pendientes.first;
+      final ok = await _repo.registrarAbonoFiado(
+        cuentaId: cuenta.id,
+        monto: monto,
+      );
+
+      if (!ok) {
+        _addAssistantMessage('No se pudo registrar el abono para $cliente.');
+        return;
+      }
+
+      final nuevoSaldo = (cuenta.saldoPendiente - monto) < 0
+          ? 0.0
+          : (cuenta.saldoPendiente - monto);
+
+      _addAssistantMessage(
+        '${mensaje.isEmpty ? '' : '$mensaje\n\n'}'
+        '✓ **Abono registrado en caja:**\n'
+        '• **Cliente:** ${cuenta.clienteNombre}\n'
+        '• **Monto abonado:** Q${monto.toStringAsFixed(2)}\n'
+        '• **Saldo restante:** Q${nuevoSaldo.toStringAsFixed(2)} '
+        '${nuevoSaldo <= 0 ? '🎉 *(¡Cuenta pagada por completo!)*' : ''}',
+      );
+    } on Exception catch (e) {
+      _addAssistantMessage('Error al registrar abono: $e');
+    }
+  }
+
+  Future<void> _manejarPedidosProveedor(String mensaje) async {
+    try {
+      final sugerencias = await _repo.obtenerSugerenciasPedidosProveedores();
+
+      if (sugerencias.isEmpty) {
+        _addAssistantMessage(
+          mensaje.isNotEmpty
+              ? mensaje
+              : '¡Inventario óptimo! Ninguno de tus productos vinculados a proveedores está bajo o agotado en este momento.',
+        );
+        return;
+      }
+
+      final buffer = StringBuffer();
+      if (mensaje.isNotEmpty) {
+        buffer.writeln('$mensaje\n');
+      } else {
+        buffer.writeln('📋 **Sugerencias de pedidos a proveedores:**\n');
+      }
+
+      for (final sug in sugerencias) {
+        final aviso = sug.esVisitaHoy
+            ? ' 🚨 *(¡Visita HOY!)*'
+            : sug.esVisitaManana
+                ? ' ⏳ *(Visita MAÑANA)*'
+                : '';
+        buffer.writeln('🚚 **${sug.proveedor.nombre}**$aviso');
+        buffer.writeln('   *Días de visita:* ${sug.diaVisitaTexto}');
+        for (final item in sug.productos) {
+          buffer.writeln(
+            '   • **${item.producto.nombre}**: Quedan ${item.existenciasActuales.toStringAsFixed(0)} (Mín: ${item.stockMinimo.toStringAsFixed(0)}) ➔ **Pedir: ${item.cantidadSugerida.toStringAsFixed(0)} ${item.producto.unidadMedida}** (~Q${item.costoTotalEstimado.toStringAsFixed(2)})',
+          );
+        }
+        buffer.writeln(
+          '   **Total estimado:** Q${sug.costoTotalEstimado.toStringAsFixed(2)}\n',
+        );
+      }
+
+      _addAssistantMessage(buffer.toString().trim());
+    } on Exception catch (e) {
+      _addAssistantMessage('No se pudieron calcular los pedidos a proveedores: $e');
+    }
+  }
+
   String _estadoInventario(String? estado) {
     switch (estado) {
       case 'agotado':
@@ -875,6 +1108,13 @@ class ChatController extends StateNotifier<ChatState> {
 }
 
 final llmServiceProvider = Provider<LlmService>((ref) {
+  if (kIsWeb) {
+    return llmServiceFromEnv(
+      dotenv.env,
+      tokenProvider: () =>
+          Supabase.instance.client.auth.currentSession?.accessToken ?? '',
+    );
+  }
   return llmServiceFromEnv(dotenv.env);
 });
 

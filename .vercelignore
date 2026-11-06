@@ -1,0 +1,13 @@
+.env
+.git
+.idea
+.dart_tool
+build
+android
+ios
+mock
+docs
+dashboard
+tool
+test
+supabase
