@@ -16,6 +16,10 @@ fi
 
 export PATH="${FLUTTER_ROOT}/bin:${PATH}"
 
+# El SDK descargado se extrae con otro UID y Vercel ejecuta como root.
+git config --global --add safe.directory "${FLUTTER_ROOT}"
+git config --global --add safe.directory "${FLUTTER_ROOT}/*"
+
 flutter config --no-analytics --enable-web
 flutter pub get
 
